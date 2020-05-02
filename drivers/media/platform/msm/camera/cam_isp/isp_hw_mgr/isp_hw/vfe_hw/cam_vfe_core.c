@@ -1,4 +1,4 @@
-/* Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -444,8 +444,6 @@ void cam_isp_hw_get_timestamp(struct cam_isp_timestamp *time_stamp)
 	get_monotonic_boottime(&ts);
 	time_stamp->mono_time.tv_sec    = ts.tv_sec;
 	time_stamp->mono_time.tv_usec   = ts.tv_nsec/1000;
-	time_stamp->time_usecs =  ts.tv_sec * 1000000 +
-				time_stamp->mono_time.tv_usec;
 }
 
 static int cam_vfe_irq_top_half(uint32_t    evt_id,
@@ -459,8 +457,8 @@ static int cam_vfe_irq_top_half(uint32_t    evt_id,
 
 	handler_priv = th_payload->handler_priv;
 
-	CAM_DBG(CAM_ISP, "IRQ status_0 = %x", th_payload->evt_status_arr[0]);
-	CAM_DBG(CAM_ISP, "IRQ status_1 = %x", th_payload->evt_status_arr[1]);
+	CAM_QCLOGMINIMAL(CAM_ISP, "IRQ status_0 = %x", th_payload->evt_status_arr[0]);
+	CAM_QCLOGMINIMAL(CAM_ISP, "IRQ status_1 = %x", th_payload->evt_status_arr[1]);
 
 	rc  = cam_vfe_get_evt_payload(handler_priv->core_info, &evt_payload);
 	if (rc) {
@@ -471,6 +469,8 @@ static int cam_vfe_irq_top_half(uint32_t    evt_id,
 			th_payload->evt_status_arr[1]);
 		return rc;
 	}
+	trace_printk("core %d, IRQ status_0 = %x\n",handler_priv->core_index,
+		th_payload->evt_status_arr[0]);
 
 	core_info =  handler_priv->core_info;
 	cam_isp_hw_get_timestamp(&evt_payload->ts);
@@ -487,6 +487,7 @@ static int cam_vfe_irq_top_half(uint32_t    evt_id,
 			irq_reg_offset[i]);
 	}
 	CAM_DBG(CAM_ISP, "Violation status = %x", evt_payload->irq_reg_val[2]);
+	trace_printk("core %d, Violation status = %x\n", handler_priv->core_index, evt_payload->irq_reg_val[2]);
 
 	th_payload->evt_payload_priv = evt_payload;
 
@@ -762,8 +763,6 @@ int cam_vfe_process_cmd(void *hw_priv, uint32_t cmd_type,
 	case CAM_ISP_HW_CMD_CLOCK_UPDATE:
 	case CAM_ISP_HW_CMD_BW_UPDATE:
 	case CAM_ISP_HW_CMD_BW_CONTROL:
-	case CAM_ISP_HW_CMD_GET_IRQ_REGISTER_DUMP:
-	case CAM_ISP_HW_CMD_FPS_CONFIG:
 		rc = core_info->vfe_top->hw_ops.process_cmd(
 			core_info->vfe_top->top_priv, cmd_type, cmd_args,
 			arg_size);

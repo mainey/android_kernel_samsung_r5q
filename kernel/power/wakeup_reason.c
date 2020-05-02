@@ -41,6 +41,34 @@ static ktime_t curr_monotime; /* monotonic time after last suspend */
 static ktime_t last_stime; /* monotonic boottime offset before last suspend */
 static ktime_t curr_stime; /* monotonic boottime offset after last suspend */
 
+static int glink_hwirq_list[4] = {
+	481, /*modem*/
+	188, /*adsp*/
+	202, /*dsps*/
+	606 /*cdsp */
+};
+
+const char *glink_intr_owner(int irq);
+
+char irq_name[256];
+
+static char *get_irq_name(int irq)
+{
+	struct irq_desc *desc = irq_to_desc(irq);
+	int idx;
+	char* buf = irq_name;
+
+	for (idx = 0; idx < ARRAY_SIZE(glink_hwirq_list); idx++) {
+		if (desc->irq_data.hwirq == glink_hwirq_list[idx]) {
+			sprintf(buf, "%s-%s", desc->action->name, glink_intr_owner(irq));
+			return buf;
+		}
+	}
+	
+	sprintf(buf, "%s", desc->action->name);
+	return buf;
+}
+
 static ssize_t last_resume_reason_show(struct kobject *kobj, struct kobj_attribute *attr,
 		char *buf)
 {
@@ -54,7 +82,7 @@ static ssize_t last_resume_reason_show(struct kobject *kobj, struct kobj_attribu
 			desc = irq_to_desc(irq_list[irq_no]);
 			if (desc && desc->action && desc->action->name)
 				buf_offset += sprintf(buf + buf_offset, "%d %s\n",
-						irq_list[irq_no], desc->action->name);
+						irq_list[irq_no], get_irq_name(irq_list[irq_no]));
 			else
 				buf_offset += sprintf(buf + buf_offset, "%d\n",
 						irq_list[irq_no]);
@@ -113,8 +141,17 @@ void log_wakeup_reason(int irq)
 	struct irq_desc *desc;
 	desc = irq_to_desc(irq);
 	if (desc && desc->action && desc->action->name)
+#ifdef CONFIG_SEC_PM
+	{
+		struct irq_chip *chip;
+		chip = irq_desc_get_chip(desc);
+		printk(KERN_INFO "Resume caused by IRQ %d, %s -> %s\n", irq,
+				chip->name, get_irq_name(irq));
+	}
+#else
 		printk(KERN_INFO "Resume caused by IRQ %d, %s\n", irq,
 				desc->action->name);
+#endif
 	else
 		printk(KERN_INFO "Resume caused by IRQ %d\n", irq);
 
@@ -193,6 +230,7 @@ static int wakeup_reason_pm_event(struct notifier_block *notifier,
 
 static struct notifier_block wakeup_reason_pm_notifier_block = {
 	.notifier_call = wakeup_reason_pm_event,
+	.priority = INT_MAX,
 };
 
 /* Initializes the sysfs parameter
@@ -222,4 +260,4 @@ int __init wakeup_reason_init(void)
 	return 0;
 }
 
-late_initcall(wakeup_reason_init);
+subsys_initcall(wakeup_reason_init);

@@ -68,6 +68,10 @@
 #include <linux/debugfs.h>
 #include <linux/uaccess.h>
 
+#ifdef CONFIG_SEC_DEBUG
+#include <linux/sec_debug.h>
+#endif
+
 #define ARM_MMU500_ACTLR_CPRE		(1 << 1)
 
 #define ARM_MMU500_ACR_CACHE_LOCK	(1 << 26)
@@ -1207,7 +1211,8 @@ static int __arm_smmu_tlb_sync(struct arm_smmu_device *smmu,
 	dev_err_ratelimited(smmu->dev,
 			    "TLB sync timed out -- SMMU may be deadlocked ack 0x%x pwr 0x%x sync and invalidation progress 0x%x\n",
 			    sync_inv_ack, tbu_pwr_status, sync_inv_progress);
-	return -EINVAL;
+	dev_err_ratelimited(smmu->dev, "apps_smmu_scr0 = 0x%x, apps_smmu_inv_status = 0x%x \n", scm_io_read(0x15000000), scm_io_read(0x1500251C)); 
+	return -EINVAL; 
 }
 
 static void arm_smmu_tlb_sync_global(struct arm_smmu_device *smmu)
@@ -1574,6 +1579,45 @@ static phys_addr_t arm_smmu_verify_fault(struct iommu_domain *domain,
 	return (phys == 0 ? phys_post_tlbiall : phys);
 }
 
+static char* arm_smmu_get_devname(struct arm_smmu_domain *smmu_domain, u32 sid)
+{
+	struct iommu_fwspec *fwspec = NULL;
+	struct device* dev = NULL;
+	u32 i;
+	char *colon, *comma, *dot, *ch = NULL;
+
+	if (smmu_domain->dev)
+		fwspec = smmu_domain->dev->iommu_fwspec;
+
+	for (i = 0; fwspec && i < fwspec->num_ids; i++) {
+		if ((fwspec->ids[i] & smmu_domain->smmu->streamid_mask) == sid) {
+			dev = smmu_domain->dev;
+			break;
+		}
+	}
+
+	if (dev) {
+		if (dev_is_pci(dev))
+			return (char *)dev_name(dev);
+			
+		colon = strrchr(dev_name(dev), ':');
+		comma = strrchr(dev_name(dev), ',');
+		dot = strrchr(dev_name(dev), '.');
+
+		if (colon == NULL && comma == NULL && dot == NULL)
+			return (char *)dev_name(dev);
+		
+		if (colon > comma)
+			ch = colon;
+		else
+			ch = comma;
+
+		return dot > ch ? dot + 1 : ch + 1;
+	}
+
+	return "No Device";
+}
+
 static irqreturn_t arm_smmu_context_fault(int irq, void *dev)
 {
 	int flags, ret, tmp;
@@ -1611,6 +1655,9 @@ static irqreturn_t arm_smmu_context_fault(int irq, void *dev)
 	if (fatal_asf && (fsr & FSR_ASF)) {
 		dev_err(smmu->dev,
 			"Took an address size fault.  Refusing to recover.\n");
+
+		sec_debug_save_smmu_info_asf_fatal();
+
 		BUG();
 	}
 
@@ -1672,7 +1719,10 @@ static irqreturn_t arm_smmu_context_fault(int irq, void *dev)
 		if (!non_fatal_fault) {
 			dev_err(smmu->dev,
 				"Unhandled arm-smmu context fault!\n");
-			BUG();
+
+			sec_debug_save_smmu_info_fatal();
+			// BUG();
+			panic("%s SMMU Fault - SID=0x%x", arm_smmu_get_devname(smmu_domain, frsynra), frsynra);
 		}
 	}
 

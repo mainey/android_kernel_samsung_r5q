@@ -427,7 +427,7 @@ int verity_fec_decode(struct dm_verity *v, struct dm_verity_io *io,
 	int r;
 	struct dm_verity_fec_io *fio = fec_io(io);
 	u64 offset, res, rsb;
-
+	
 	if (!verity_fec_is_enabled(v))
 		return -EOPNOTSUPP;
 
@@ -437,9 +437,6 @@ int verity_fec_decode(struct dm_verity *v, struct dm_verity_io *io,
 	}
 
 	fio->level++;
-
-	if (type == DM_VERITY_BLOCK_TYPE_METADATA)
-		block += v->data_blocks;
 
 	/*
 	 * For RS(M, N), the continuous FEC data is divided into blocks of N

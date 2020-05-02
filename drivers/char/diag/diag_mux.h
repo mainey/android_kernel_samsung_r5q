@@ -52,6 +52,7 @@ struct diag_logger_ops {
 	void (*close)(void);
 	void (*open_device)(int id);
 	void (*close_device)(int id);
+	void (*clear_tbl_entries)(int id);
 	int (*queue_read)(int id);
 	int (*write)(int id, unsigned char *buf, int len, int ctx);
 	int (*close_peripheral)(int id, uint8_t peripheral);
@@ -71,6 +72,7 @@ int diag_mux_register(int proc, int ctx, struct diag_mux_ops *ops);
 int diag_mux_queue_read(int proc);
 int diag_mux_write(int proc, unsigned char *buf, int len, int ctx);
 int diag_mux_close_peripheral(int proc, uint8_t peripheral);
+void diag_mux_close_device(int proc);
 int diag_mux_open_all(struct diag_logger_t *logger);
 int diag_mux_close_all(void);
 int diag_pcie_register_ops(int proc, int ctx, struct diag_mux_ops *ops);

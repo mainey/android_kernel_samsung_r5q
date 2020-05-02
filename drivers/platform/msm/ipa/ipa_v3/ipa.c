@@ -6710,6 +6710,7 @@ static int ipa3_pre_init(const struct ipa3_plat_drv_res *resource_p,
 	/* proxy vote for modem is added in ipa3_post_init() phase */
 	if (ipa3_ctx->ipa_hw_type != IPA_HW_v4_0)
 		ipa3_proxy_clk_unvote();
+
 	return 0;
 fail_cdev_add:
 fail_gsi_pre_fw_load_init:
@@ -8190,6 +8191,7 @@ int ipa3_get_smmu_params(struct ipa_smmu_in_params *in,
 
 #define MAX_LEN 96
 
+/* TODO: add a disable if we use malibox struct for another purpose */
 void ipa_pc_qmp_enable(void)
 {
 	char buf[MAX_LEN] = "{class: bcm, res: ipa_pc, val: 1}";
@@ -8443,3 +8445,17 @@ module_param(emulation_type, uint, 0000);
 MODULE_PARM_DESC(
 	emulation_type,
 	"emulation_type=N N can be 13 for IPA 3.5.1, 14 for IPA 4.0, 17 for IPA 4.5");
+
+#if defined(CONFIG_ARGOS)
+void ipa3_set_napi_chained_rx(bool enable)
+{
+	if (!ipa3_ctx)
+		return;
+
+	if (enable && !ipa3_ctx->enable_napi_chain)
+		ipa3_ctx->enable_napi_chain = 1;
+	else if (!enable && ipa3_ctx->enable_napi_chain)
+		ipa3_ctx->enable_napi_chain = 0;
+}
+EXPORT_SYMBOL(ipa3_set_napi_chained_rx);
+#endif

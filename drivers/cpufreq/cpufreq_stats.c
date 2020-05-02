@@ -25,6 +25,7 @@ struct cpufreq_stats {
 	u64 *time_in_state;
 	unsigned int *freq_table;
 	unsigned int *trans_table;
+	int stats_on;
 };
 
 static int cpufreq_stats_update(struct cpufreq_stats *stats)
@@ -48,6 +49,11 @@ static void cpufreq_stats_clear_table(struct cpufreq_stats *stats)
 	stats->total_trans = 0;
 }
 
+static ssize_t show_stats_on(struct cpufreq_policy *policy, char *buf)
+{
+	return sprintf(buf, "%d\n", policy->stats->stats_on);
+}
+
 static ssize_t show_total_trans(struct cpufreq_policy *policy, char *buf)
 {
 	return sprintf(buf, "%d\n", policy->stats->total_trans);
@@ -59,7 +65,7 @@ static ssize_t show_time_in_state(struct cpufreq_policy *policy, char *buf)
 	ssize_t len = 0;
 	int i;
 
-	if (policy->fast_switch_enabled)
+	if (policy->stats->stats_on == 0)
 		return 0;
 
 	cpufreq_stats_update(stats);
@@ -79,13 +85,27 @@ static ssize_t store_reset(struct cpufreq_policy *policy, const char *buf,
 	return count;
 }
 
+static ssize_t store_stats_on(struct cpufreq_policy *policy, const char *buf,
+			   size_t count)
+{
+	int ret;
+	unsigned long value;
+
+	ret = kstrtoul(buf, 0, &value);
+
+	if(value == 1 || value == 0)
+		policy->stats->stats_on = value;
+
+	return count;
+}
+
 static ssize_t show_trans_table(struct cpufreq_policy *policy, char *buf)
 {
 	struct cpufreq_stats *stats = policy->stats;
 	ssize_t len = 0;
 	int i, j;
 
-	if (policy->fast_switch_enabled)
+	if (policy->stats->stats_on == 0)
 		return 0;
 
 	len += snprintf(buf + len, PAGE_SIZE - len, "   From  :    To\n");
@@ -127,12 +147,14 @@ cpufreq_freq_attr_ro(trans_table);
 cpufreq_freq_attr_ro(total_trans);
 cpufreq_freq_attr_ro(time_in_state);
 cpufreq_freq_attr_wo(reset);
+cpufreq_freq_attr_rw(stats_on);
 
 static struct attribute *default_attrs[] = {
 	&total_trans.attr,
 	&time_in_state.attr,
 	&reset.attr,
 	&trans_table.attr,
+	&stats_on.attr,
 	NULL
 };
 static const struct attribute_group stats_attr_group = {
@@ -243,4 +265,9 @@ void cpufreq_stats_record_transition(struct cpufreq_policy *policy,
 	stats->last_index = new_index;
 	stats->trans_table[old_index * stats->max_state + new_index]++;
 	stats->total_trans++;
+}
+
+int cpufreq_stats_on_check(struct cpufreq_policy *policy)
+{
+	return policy->stats->stats_on;
 }

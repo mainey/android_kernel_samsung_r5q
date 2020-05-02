@@ -222,7 +222,11 @@ ENDPROC(cpu_do_switch_mm)
  * This is the low-level counterpart to cpu_replace_ttbr1, and should not be
  * called by anything else. It can only be executed from a TTBR0 mapping.
  */
+#ifdef CONFIG_RKP_CFP_JOPP
+NOP_ENTRY(idmap_cpu_replace_ttbr1)
+#else
 ENTRY(idmap_cpu_replace_ttbr1)
+#endif
 	mrs	x2, daif
 	msr	daifset, #0xf
 
@@ -262,7 +266,11 @@ ENDPROC(idmap_cpu_replace_ttbr1)
  */
 __idmap_kpti_flag:
 	.long	1
+#ifdef CONFIG_RKP_CFP_JOPP
+NOP_ENTRY(idmap_kpti_install_ng_mappings)
+#else
 ENTRY(idmap_kpti_install_ng_mappings)
+#endif
 	cpu		.req	w0
 	num_cpus	.req	w1
 	swapper_pa	.req	x2
@@ -385,13 +393,22 @@ skip_pte:
 	/* Secondary CPUs end up here */
 __idmap_kpti_secondary:
 	/* Uninstall swapper before surgery begins */
+#ifdef CONFIG_RKP_CFP_ROPP
+	__idmap_cpu_set_reserved_ttbr1 x18, x16
+#else
 	__idmap_cpu_set_reserved_ttbr1 x18, x17
+#endif
 
 	/* Increment the flag to let the boot CPU we're ready */
 1:	ldxr	w18, [flag_ptr]
 	add	w18, w18, #1
+#ifdef CONFIG_RKP_CFP_ROPP
+	stxr	w16, w18, [flag_ptr]
+	cbnz	w16, 1b
+#else
 	stxr	w17, w18, [flag_ptr]
 	cbnz	w17, 1b
+#endif
 
 	/* Wait for the boot CPU to finish messing around with swapper */
 	sevl

@@ -1278,8 +1278,8 @@ static int cam_vfe_bus_handle_wm_done_top_half(uint32_t evt_id,
 
 	rsrc_data = wm_res->res_priv;
 
-	CAM_DBG(CAM_ISP, "IRQ status_0 = 0x%x", th_payload->evt_status_arr[0]);
-	CAM_DBG(CAM_ISP, "IRQ status_1 = 0x%x", th_payload->evt_status_arr[1]);
+	CAM_QCLOGMINIMAL(CAM_ISP, "IRQ status_0 = 0x%x", th_payload->evt_status_arr[0]);
+	CAM_QCLOGMINIMAL(CAM_ISP, "IRQ status_1 = 0x%x", th_payload->evt_status_arr[1]);
 
 	rc  = cam_vfe_bus_get_evt_payload(rsrc_data->common_data, &evt_payload);
 	if (rc) {
@@ -1827,9 +1827,9 @@ static int cam_vfe_bus_handle_comp_done_top_half(uint32_t evt_id,
 
 	rsrc_data = comp_grp->res_priv;
 
-	CAM_DBG(CAM_ISP, "IRQ status_0 = 0x%x", th_payload->evt_status_arr[0]);
-	CAM_DBG(CAM_ISP, "IRQ status_1 = 0x%x", th_payload->evt_status_arr[1]);
-	CAM_DBG(CAM_ISP, "IRQ status_2 = 0x%x", th_payload->evt_status_arr[2]);
+	CAM_QCLOGMINIMAL(CAM_ISP, "IRQ status_0 = 0x%x", th_payload->evt_status_arr[0]);
+	CAM_QCLOGMINIMAL(CAM_ISP, "IRQ status_1 = 0x%x", th_payload->evt_status_arr[1]);
+	CAM_QCLOGMINIMAL(CAM_ISP, "IRQ status_2 = 0x%x", th_payload->evt_status_arr[2]);
 
 	rc  = cam_vfe_bus_get_evt_payload(rsrc_data->common_data, &evt_payload);
 	if (rc) {
@@ -2881,7 +2881,7 @@ static int cam_vfe_bus_update_wm(void *priv, void *cmd_args,
 		val = ALIGNUP(val, 16);
 		if (val != io_cfg->planes[i].plane_stride &&
 			val != wm_data->stride)
-			CAM_WARN(CAM_ISP,
+			CAM_DBG(CAM_ISP,
 				"Warning stride %u expected %u",
 				io_cfg->planes[i].plane_stride,
 				val);

@@ -28,6 +28,9 @@
 #include "msm_kms.h"
 #include "sde_connector.h"
 #include "dp_drm.h"
+#ifdef CONFIG_SEC_DISPLAYPORT
+#include "secdp.h"
+#endif
 
 #define DP_MST_DEBUG(fmt, ...) pr_debug(fmt, ##__VA_ARGS__)
 #define DP_MST_INFO_LOG(fmt, ...) pr_debug(fmt, ##__VA_ARGS__)
@@ -339,6 +342,8 @@ static struct edid *dp_mst_sim_get_edid(struct drm_connector *connector,
 	struct dp_mst_private *mst = container_of(mgr,
 			struct dp_mst_private, mst_mgr);
 
+	pr_debug("+++\n");
+
 	return drm_edid_duplicate(mst->simulator.edid);
 }
 
@@ -510,6 +515,9 @@ static int _dp_mst_compute_config(struct drm_atomic_state *state,
 	int rc = 0;
 
 	DP_MST_DEBUG("enter\n");
+
+	pr_info("mode->timing.pixel_clk_khz=%d, mode->timing.bpp=%d\n",
+		mode->timing.pixel_clk_khz, mode->timing.bpp);
 
 	pbn = mst->mst_fw_cbs->calc_pbn_mode(mode);
 

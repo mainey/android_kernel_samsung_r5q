@@ -28,6 +28,23 @@
 #include <linux/mhi.h>
 #include "mhi_qcom.h"
 
+#ifdef CONFIG_SEC_DEBUG_MDM_FILE_INFO
+#include <linux/sec_debug.h>
+#endif
+
+static u32 mhi_bl_session_id;
+
+static int mhi_bl_panic_handler(struct notifier_block *this,
+				unsigned long event, void *ptr)
+{
+	pr_emerg("mhi Session ID:0x%x\n", mhi_bl_session_id);
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block mhi_bl_panic_nb = {
+	.notifier_call  = mhi_bl_panic_handler,
+};
+
 struct arch_info {
 	struct mhi_dev *mhi_dev;
 	struct esoc_desc *esoc_client;
@@ -58,10 +75,41 @@ enum MHI_DEBUG_LEVEL  mhi_ipc_log_lvl = MHI_MSG_LVL_VERBOSE;
 
 #else
 
-#define MHI_IPC_LOG_PAGES (10)
-enum MHI_DEBUG_LEVEL  mhi_ipc_log_lvl = MHI_MSG_LVL_ERROR;
+#define MHI_IPC_LOG_PAGES (20)
+enum MHI_DEBUG_LEVEL  mhi_ipc_log_lvl = MHI_MSG_LVL_INFO;
 
 #endif
+
+void mhi_reg_write_work(struct work_struct *w)
+{
+	struct mhi_controller *mhi_cntrl = container_of(w,
+						struct mhi_controller,
+						reg_write_work);
+	struct mhi_dev *mhi_dev = mhi_controller_get_devdata(mhi_cntrl);
+	struct pci_dev *pci_dev = mhi_dev->pci_dev;
+	struct reg_write_info *info =
+				&mhi_cntrl->reg_write_q[mhi_cntrl->read_idx];
+
+	if (!info->valid)
+		return;
+
+	if (mhi_is_active(mhi_cntrl->mhi_dev) && msm_pcie_prevent_l1(pci_dev))
+		return;
+
+	while (info->valid) {
+		if (!mhi_is_active(mhi_cntrl->mhi_dev))
+			return;
+
+		writel_relaxed(info->val, info->reg_addr);
+		info->valid = false;
+		mhi_cntrl->read_idx =
+				(mhi_cntrl->read_idx + 1) &
+						(REG_WRITE_QUEUE_LEN - 1);
+		info = &mhi_cntrl->reg_write_q[mhi_cntrl->read_idx];
+	}
+
+	msm_pcie_allow_l1(pci_dev);
+}
 
 static int mhi_arch_pm_notifier(struct notifier_block *nb,
 				unsigned long event, void *unused)
@@ -279,6 +327,12 @@ static void mhi_bl_remove(struct mhi_device *mhi_device)
 	struct mhi_dev *mhi_dev = mhi_controller_get_devdata(mhi_cntrl);
 	struct arch_info *arch_info = mhi_dev->arch_info;
 
+	atomic_notifier_chain_unregister(&panic_notifier_list, &mhi_bl_panic_nb);
+
+	ipc_log_string(arch_info->boot_ipc_log,
+			HLOG "mhi Session ID:0x%x\n", mhi_bl_session_id);
+	pr_emerg("mhi Session ID:0x%x\n", mhi_bl_session_id);
+
 	arch_info->boot_dev = NULL;
 	ipc_log_string(arch_info->boot_ipc_log,
 		       HLOG "Received Remove notif.\n");
@@ -328,11 +382,8 @@ static  int mhi_arch_pcie_scale_bw(struct mhi_controller *mhi_cntrl,
 {
 	int ret;
 
-	mhi_cntrl->lpm_disable(mhi_cntrl, mhi_cntrl->priv_data);
 	ret = msm_pcie_set_link_bandwidth(pci_dev, link_info->target_link_speed,
 					  link_info->target_link_width);
-	mhi_cntrl->lpm_enable(mhi_cntrl, mhi_cntrl->priv_data);
-
 	if (ret)
 		return ret;
 
@@ -371,6 +422,19 @@ static int mhi_bl_probe(struct mhi_device *mhi_device,
 							 node_name, 0);
 	ipc_log_string(arch_info->boot_ipc_log, HLOG
 		       "Entered SBL, Session ID:0x%x\n", mhi_cntrl->session_id);
+
+	mhi_bl_session_id = mhi_cntrl->session_id;
+	atomic_notifier_chain_register(&panic_notifier_list, &mhi_bl_panic_nb);
+
+#ifdef CONFIG_SEC_DEBUG_MDM_FILE_INFO
+{
+    char sid[128];
+
+    snprintf(sid, sizeof(sid), "%x", mhi_bl_session_id);
+    pr_info("%s: session id: %s\n", __func__, sid);
+    sec_set_mdm_summary_info(sid);
+}
+#endif
 
 	return 0;
 }

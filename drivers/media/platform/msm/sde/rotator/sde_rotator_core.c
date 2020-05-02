@@ -41,7 +41,6 @@
 #include "sde_rotator_trace.h"
 #include "sde_rotator_debug.h"
 
-
 /* Rotator device id to be used in SCM call */
 #define SDE_ROTATOR_DEVICE	21
 
@@ -3137,6 +3136,7 @@ int sde_rotator_core_init(struct sde_rot_mgr **pmgr,
 			SDE_MDP_HW_REV_620)) {
 		mgr->ops_hw_init = sde_rotator_r3_init;
 		mgr->min_rot_clk = ROT_MIN_ROT_CLK;
+		mgr->max_rot_clk = ROT_R3_MAX_ROT_CLK;
 
 		/*
 		 * on platforms where the maxlinewidth is greater than
@@ -3331,6 +3331,7 @@ int sde_rotator_runtime_idle(struct device *dev)
 int sde_rotator_pm_suspend(struct device *dev)
 {
 	struct sde_rot_mgr *mgr;
+	int i;
 
 	mgr = sde_rot_mgr_from_device(dev);
 
@@ -3345,8 +3346,20 @@ int sde_rotator_pm_suspend(struct device *dev)
 	sde_rotator_suspend_cancel_rot_work(mgr);
 	mgr->minimum_bw_vote = 0;
 	sde_rotator_update_perf(mgr);
+	mgr->pm_rot_enable_clk_cnt = mgr->rot_enable_clk_cnt;
+
+	if (mgr->pm_rot_enable_clk_cnt) {
+		for (i = 0; i < mgr->pm_rot_enable_clk_cnt; i++)
+			sde_rotator_clk_ctrl(mgr, false);
+
+		sde_rotator_update_clk(mgr);
+	}
+
 	ATRACE_END("pm_active");
-	SDEROT_DBG("end pm active %d\n", atomic_read(&mgr->device_suspended));
+	SDEROT_DBG("end pm active %d clk_cnt %d\n",
+	 atomic_read(&mgr->device_suspended), mgr->pm_rot_enable_clk_cnt);
+	SDEROT_EVTLOG(mgr->pm_rot_enable_clk_cnt,
+			 atomic_read(&mgr->device_suspended));
 	sde_rot_mgr_unlock(mgr);
 	return 0;
 }
@@ -3358,6 +3371,7 @@ int sde_rotator_pm_suspend(struct device *dev)
 int sde_rotator_pm_resume(struct device *dev)
 {
 	struct sde_rot_mgr *mgr;
+	int i;
 
 	mgr = sde_rot_mgr_from_device(dev);
 
@@ -3377,10 +3391,20 @@ int sde_rotator_pm_resume(struct device *dev)
 	pm_runtime_enable(dev);
 
 	sde_rot_mgr_lock(mgr);
-	SDEROT_DBG("begin pm active %d\n", atomic_read(&mgr->device_suspended));
+	SDEROT_DBG("begin pm active %d clk_cnt %d\n",
+	 atomic_read(&mgr->device_suspended), mgr->pm_rot_enable_clk_cnt);
 	ATRACE_BEGIN("pm_active");
+	SDEROT_EVTLOG(mgr->pm_rot_enable_clk_cnt,
+			 atomic_read(&mgr->device_suspended));
 	atomic_dec(&mgr->device_suspended);
 	sde_rotator_update_perf(mgr);
+
+	if (mgr->pm_rot_enable_clk_cnt) {
+		sde_rotator_update_clk(mgr);
+		for (i = 0; i < mgr->pm_rot_enable_clk_cnt; i++)
+			sde_rotator_clk_ctrl(mgr, true);
+	}
+
 	sde_rot_mgr_unlock(mgr);
 	return 0;
 }

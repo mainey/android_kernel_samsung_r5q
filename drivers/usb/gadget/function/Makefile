@@ -51,8 +51,13 @@ usb_f_printer-y			:= f_printer.o
 obj-$(CONFIG_USB_F_PRINTER)	+= usb_f_printer.o
 usb_f_tcm-y			:= f_tcm.o
 obj-$(CONFIG_USB_F_TCM)		+= usb_f_tcm.o
+ifeq ($(CONFIG_SEC_FACTORY),y)
 usb_f_mtp-y                     := f_mtp.o
 obj-$(CONFIG_USB_F_MTP)         += usb_f_mtp.o
+else
+usb_f_mtp_samsung-y	            := f_mtp_samsung.o
+obj-$(CONFIG_USB_F_MTP)         += usb_f_mtp_samsung.o
+endif
 usb_f_ptp-y                     := f_ptp.o
 obj-$(CONFIG_USB_F_PTP)         += usb_f_ptp.o
 usb_f_audio_source-y            := f_audio_source.o
@@ -69,3 +74,5 @@ usb_f_gsi-y			:= f_gsi.o
 obj-$(CONFIG_USB_F_GSI)		+= usb_f_gsi.o
 usb_f_qdss-y			:= f_qdss.o u_qdss.o
 obj-$(CONFIG_USB_F_QDSS)	+= usb_f_qdss.o
+usb_f_conn_gadget-y             := f_conn_gadget.o
+obj-$(CONFIG_USB_F_CONN_GADGET) += usb_f_conn_gadget.o

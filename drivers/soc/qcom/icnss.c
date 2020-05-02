@@ -1203,7 +1203,9 @@ static int icnss_driver_event_fw_ready_ind(void *data)
 
 	icnss_pr_info("WLAN FW is ready: 0x%lx\n", penv->state);
 
-	icnss_hw_power_off(penv);
+	msleep(25);
+	icnss_hw_power_off(penv);	
+	msleep(30);
 
 	if (!penv->pdev) {
 		icnss_pr_err("Device is not ready\n");

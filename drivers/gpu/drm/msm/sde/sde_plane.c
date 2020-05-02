@@ -38,6 +38,15 @@
 #include "sde_color_processing.h"
 #include "sde_hw_rot.h"
 
+#include "../../../../../drivers/gpu/msm/kgsl_device.h"
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+#include "sde_encoder.h"
+#include "../samsung/ss_dsi_panel_common.h"
+#ifdef CONFIG_SEC_DEBUG
+#include <linux/sec_debug.h>
+#endif
+#endif
+
 #define SDE_DEBUG_PLANE(pl, fmt, ...) SDE_DEBUG("plane%d " fmt,\
 		(pl) ? (pl)->base.base.id : -1, ##__VA_ARGS__)
 
@@ -908,6 +917,14 @@ int sde_plane_wait_input_fence(struct drm_plane *plane, uint32_t wait_ms)
 						wait_ms, prefix);
 				psde->is_error = true;
 				sde_kms_timeline_status(plane->dev);
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+				{
+					struct dma_fence *tout_fence = input_fence;
+
+					pr_info("DPCI Logging for fence timeout\n");
+					ss_inc_ftout_debug(tout_fence->ops->get_timeline_name(tout_fence));
+				}
+#endif
 				ret = -ETIMEDOUT;
 				break;
 			case -ERESTARTSYS:
@@ -983,6 +1000,7 @@ static int _sde_plane_get_aspace(
 		return -EFAULT;
 	}
 
+	SDE_EVT32(DRMID(&psde->base),mode);
 	return 0;
 }
 
@@ -3583,6 +3601,39 @@ static int _sde_plane_validate_scaler_v2(struct sde_plane *psde,
 	return 0;
 }
 
+static int _sde_plane_validate_shared_crtc(struct sde_plane *psde,
+	struct drm_plane_state *state)
+{
+	struct sde_kms *sde_kms;
+	struct sde_splash_display *splash_display;
+	int i, j;
+
+	sde_kms = _sde_plane_get_kms(&psde->base);
+
+	if (!sde_kms || !state->crtc)
+		return 0;
+
+	for (i = 0; i < MAX_DSI_DISPLAYS; i++) {
+		splash_display = &sde_kms->splash_data.splash_display[i];
+
+		if (splash_display && splash_display->cont_splash_enabled &&
+			splash_display->encoder &&
+			state->crtc != splash_display->encoder->crtc) {
+
+			for (j = 0; j < MAX_DATA_PATH_PER_DSIPLAY; j++) {
+
+				if (splash_display->pipes[j].sspp == psde->pipe) {
+					SDE_DEBUG_PLANE(psde,"pipe:%d used in cont-splash on crtc:%d\n",
+						psde->pipe, splash_display->encoder->crtc->base.id);
+					return -EINVAL;
+				}
+			}
+		}
+	}
+
+	return 0;
+}
+
 static int sde_plane_sspp_atomic_check(struct drm_plane *plane,
 		struct drm_plane_state *state)
 {
@@ -3659,6 +3710,12 @@ static int sde_plane_sspp_atomic_check(struct drm_plane *plane,
 				"plane doesn't have scaler/csc for yuv\n");
 		ret = -EINVAL;
 
+	/* check existing attached crtc */
+	} else if (sde_plane_enabled(plane->state) &&
+		plane->state->crtc != state->crtc) {
+		SDE_ERROR_PLANE(psde, "pipe doesn't support crtc switch\n");
+		ret = -EINVAL;
+
 	/* check src bounds */
 	} else if (rstate->out_fb_width > MAX_IMG_WIDTH ||
 		rstate->out_fb_height > MAX_IMG_HEIGHT ||
@@ -3721,6 +3778,8 @@ static int sde_plane_sspp_atomic_check(struct drm_plane *plane,
 				rstate->out_fb_width,
 				rstate->out_fb_height,
 				src.w, src.h, deci_w, deci_h)) {
+		ret = -EINVAL;
+	} else if (_sde_plane_validate_shared_crtc(psde, state)) {
 		ret = -EINVAL;
 	}
 
@@ -3795,6 +3854,9 @@ void sde_plane_flush(struct drm_plane *plane)
 {
 	struct sde_plane *psde;
 	struct sde_plane_state *pstate;
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+	struct samsung_display_driver_data *vdd;
+#endif
 
 	if (!plane || !plane->state) {
 		SDE_ERROR("invalid plane\n");
@@ -3816,6 +3878,16 @@ void sde_plane_flush(struct drm_plane *plane)
 		_sde_plane_color_fill(psde, psde->color_fill, 0xFF);
 	else if (psde->pipe_hw && psde->csc_ptr && psde->pipe_hw->ops.setup_csc)
 		psde->pipe_hw->ops.setup_csc(psde->pipe_hw, psde->csc_ptr);
+	
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+	if (plane->crtc) {
+		vdd = ss_get_vdd(plane->crtc->index);
+		if (vdd && vdd->force_white_flush) {
+			pr_err("force white flush!![%d]\n", plane->crtc->index);
+			_sde_plane_color_fill(psde, 0xFFFFFF, 0xFF);
+		}
+	}
+#endif
 
 	/* flag h/w flush complete */
 	if (plane->state)
@@ -3873,6 +3945,7 @@ static int sde_plane_sspp_atomic_update(struct drm_plane *plane,
 	state = plane->state;
 
 	pstate = to_sde_plane_state(state);
+
 	rstate = &pstate->rot;
 
 	old_pstate = to_sde_plane_state(old_state);
@@ -3903,7 +3976,7 @@ static int sde_plane_sspp_atomic_update(struct drm_plane *plane,
 	if (psde->revalidate) {
 		SDE_DEBUG("plane:%d - reconfigure all the parameters\n",
 				plane->base.id);
-		pstate->dirty = SDE_PLANE_DIRTY_ALL;
+		pstate->dirty = SDE_PLANE_DIRTY_ALL | SDE_PLANE_DIRTY_CP;
 		psde->revalidate = false;
 	}
 

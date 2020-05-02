@@ -2187,8 +2187,20 @@ static int ipa_mpm_mhi_probe_cb(struct mhi_device *mhi_dev,
 	case IPA_MPM_TETH_INIT:
 		if (ul_prod != IPA_CLIENT_MAX) {
 			/* No teth started yet, disable UL channel */
-			ipa_mpm_start_stop_mhip_chan(IPA_MPM_MHIP_CHAN_UL,
-						probe_id, MPM_MHIP_STOP);
+			ipa_ep_idx = ipa3_get_ep_mapping(ul_prod);
+			if (ipa_ep_idx == IPA_EP_NOT_ALLOCATED) {
+				IPA_MPM_ERR("fail to alloc EP.\n");
+				goto fail_stop_channel;
+			}
+ 			ret = ipa3_stop_gsi_channel(ipa_ep_idx);
+ 			if (ret) {
+ 				IPA_MPM_ERR("MHIP Stop channel err = %d\n",
+ 					ret);
+ 				goto fail_stop_channel;
+ 			}
+			ipa_mpm_change_gsi_state(probe_id,
+				IPA_MPM_MHIP_CHAN_UL,
+				GSI_STOPPED);
 		}
 		if (is_acted)
 			ipa_mpm_vote_unvote_pcie_clk(CLK_OFF, probe_id,
@@ -2198,7 +2210,6 @@ static int ipa_mpm_mhi_probe_cb(struct mhi_device *mhi_dev,
 	case IPA_MPM_TETH_CONNECTED:
 		IPA_MPM_DBG("UL channel is already started, continue\n");
 		ipa_mpm_change_teth_state(probe_id, IPA_MPM_TETH_CONNECTED);
-
 
 		if (probe_id == IPA_MPM_MHIP_CH_ID_1) {
 			/* Lift the delay for rmnet USB prod pipe */
@@ -2213,12 +2224,20 @@ static int ipa_mpm_mhi_probe_cb(struct mhi_device *mhi_dev,
 	}
 
 	atomic_inc(&ipa_mpm_ctx->probe_cnt);
-	/* Check if ODL pipe is connected to MHIP DPL pipe before probe */
-	if (probe_id == IPA_MPM_MHIP_CH_ID_2 &&
-		ipa3_is_odl_connected()) {
-		IPA_MPM_ERR("setting DPL DMA to ODL\n");
-		ret = ipa_mpm_set_dma_mode(IPA_CLIENT_MHI_PRIME_DPL_PROD,
-			IPA_CLIENT_USB_DPL_CONS, false);
+	/* Check if ODL/USB DPL pipe is connected before probe */
+	if (probe_id == IPA_MPM_MHIP_CH_ID_2) {
+		if (ipa3_is_odl_connected())
+			ret = ipa_mpm_set_dma_mode(
+							IPA_CLIENT_MHI_PRIME_DPL_PROD,
+							IPA_CLIENT_ODL_DPL_CONS, false);
+		else if (atomic_read(&ipa_mpm_ctx->adpl_over_usb_available))
+			ret = ipa_mpm_set_dma_mode(
+							IPA_CLIENT_MHI_PRIME_DPL_PROD,
+							IPA_CLIENT_USB_DPL_CONS, false);
+	if (ret)
+		IPA_MPM_ERR("DPL DMA to ODL/USB failed, ret = %d\n",
+		ret);
+
 	}
 	mutex_lock(&ipa_mpm_ctx->md[probe_id].mutex);
 	ipa_mpm_ctx->md[probe_id].init_complete = true;
@@ -2228,6 +2247,7 @@ static int ipa_mpm_mhi_probe_cb(struct mhi_device *mhi_dev,
 
 fail_gsi_setup:
 fail_start_channel:
+fail_stop_channel:
 fail_smmu:
 	if (ipa_mpm_ctx->dev_info.ipa_smmu_enabled)
 		IPA_MPM_DBG("SMMU failed\n");

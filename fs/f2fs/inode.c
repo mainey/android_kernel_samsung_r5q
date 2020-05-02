@@ -23,6 +23,9 @@ void f2fs_mark_inode_dirty_sync(struct inode *inode, bool sync)
 	if (is_inode_flag_set(inode, FI_NEW_INODE))
 		return;
 
+	if (IS_I_VERSION(inode))
+		inode_inc_iversion(inode);
+
 	if (f2fs_inode_dirtied(inode, sync))
 		return;
 
@@ -335,6 +338,10 @@ static int do_read_inode(struct inode *inode)
 	inode->i_ctime.tv_nsec = le32_to_cpu(ri->i_ctime_nsec);
 	inode->i_mtime.tv_nsec = le32_to_cpu(ri->i_mtime_nsec);
 	inode->i_generation = le32_to_cpu(ri->i_generation);
+
+	if (IS_I_VERSION(inode))
+		inode->i_version++;
+
 	if (S_ISDIR(inode->i_mode))
 		fi->i_current_depth = le32_to_cpu(ri->i_current_depth);
 	else if (S_ISREG(inode->i_mode))
@@ -422,6 +429,13 @@ static int do_read_inode(struct inode *inode)
 	F2FS_I(inode)->i_disk_time[1] = inode->i_ctime;
 	F2FS_I(inode)->i_disk_time[2] = inode->i_mtime;
 	F2FS_I(inode)->i_disk_time[3] = F2FS_I(inode)->i_crtime;
+
+	if (unlikely((inode->i_mode & S_IFMT) == 0)) {
+		print_block_data(sbi->sb, inode->i_ino, page_address(node_page),
+				0, F2FS_BLKSIZE);
+		f2fs_bug_on(sbi, 1);
+	}
+
 	f2fs_put_page(node_page, 1);
 
 	stat_inc_inline_xattr(inode);
@@ -717,15 +731,11 @@ no_delete:
 	stat_dec_inline_dir(inode);
 	stat_dec_inline_inode(inode);
 
-	if (unlikely(is_inode_flag_set(inode, FI_DIRTY_INODE))) {
+	if (likely(!is_set_ckpt_flags(sbi, CP_ERROR_FLAG) &&
+				!is_sbi_flag_set(sbi, SBI_CP_DISABLED)))
+		f2fs_bug_on(sbi, is_inode_flag_set(inode, FI_DIRTY_INODE));
+	else
 		f2fs_inode_synced(inode);
-		f2fs_msg(sbi->sb, KERN_WARNING,
-			 "inconsistent dirty inode:%u entry found during eviction\n",
-			 inode->i_ino);
-		if (!is_set_ckpt_flags(sbi, CP_ERROR_FLAG) &&
-		    !is_sbi_flag_set(sbi, SBI_CP_DISABLED))
-			f2fs_bug_on(sbi, 1);
-	}
 
 	/* ino == 0, if f2fs_new_inode() was failed t*/
 	if (inode->i_ino)
@@ -803,6 +813,7 @@ void f2fs_handle_failed_inode(struct inode *inode)
 	} else {
 		set_inode_flag(inode, FI_FREE_NID);
 	}
+
 out:
 	f2fs_unlock_op(sbi);
 

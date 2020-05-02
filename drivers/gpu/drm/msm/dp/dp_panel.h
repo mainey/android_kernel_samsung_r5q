@@ -114,6 +114,10 @@ struct dp_panel {
 	/* debug */
 	u32 max_bw_code;
 
+#ifdef CONFIG_SEC_DISPLAYPORT
+	u32 dsp_type;
+#endif
+
 	/* By default, stream_id is assigned to DP_INVALID_STREAM.
 	 * Client sets the stream id value using set_stream_id interface.
 	 */

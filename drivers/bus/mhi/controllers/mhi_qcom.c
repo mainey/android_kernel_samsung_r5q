@@ -159,6 +159,7 @@ static int mhi_init_pci_dev(struct mhi_controller *mhi_cntrl)
 	pm_runtime_set_autosuspend_delay(&pci_dev->dev, MHI_RPM_SUSPEND_TMR_MS);
 	pm_runtime_use_autosuspend(&pci_dev->dev);
 	pm_suspend_ignore_children(&pci_dev->dev, true);
+	//device_disable_async_suspend(&pci_dev->dev);
 
 	/*
 	 * pci framework will increment usage count (twice) before
@@ -773,8 +774,25 @@ static struct mhi_controller *mhi_register_controller(struct pci_dev *pci_dev)
 	if (ret)
 		goto error_register;
 
+	mhi_cntrl->offload_wq = alloc_ordered_workqueue("offload_wq",
+			WQ_MEM_RECLAIM | WQ_HIGHPRI);
+	if (!mhi_cntrl->offload_wq)
+		goto error_register;
+
+	INIT_WORK(&mhi_cntrl->reg_write_work, mhi_reg_write_work);
+
+	mhi_cntrl->reg_write_q = kcalloc(REG_WRITE_QUEUE_LEN,
+					sizeof(*mhi_cntrl->reg_write_q),
+					GFP_KERNEL);
+	if (!mhi_cntrl->reg_write_q)
+		goto error_free_wq;
+
+	atomic_set(&mhi_cntrl->write_idx, -1);
+
 	return mhi_cntrl;
 
+error_free_wq:
+	destroy_workqueue(mhi_cntrl->offload_wq);
 error_register:
 	mhi_free_controller(mhi_cntrl);
 

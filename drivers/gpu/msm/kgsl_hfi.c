@@ -271,6 +271,7 @@ static void receive_ack_cmd(struct gmu_device *gmu, void *rcvd,
 		return;
 	}
 
+
 	/* Didn't find the sender, list the waiter */
 	dev_err_ratelimited(&gmu->pdev->dev,
 		"HFI ACK: Cannot find sender for 0x%8.8x Waiter: 0x%8.8x\n",
@@ -858,7 +859,7 @@ irqreturn_t hfi_irq_handler(int irq, void *data)
 	adreno_read_gmureg(ADRENO_DEVICE(device),
 			ADRENO_REG_GMU_GMU2HOST_INTR_INFO, &status);
 	adreno_write_gmureg(ADRENO_DEVICE(device),
-			ADRENO_REG_GMU_GMU2HOST_INTR_CLR, status);
+			ADRENO_REG_GMU_GMU2HOST_INTR_CLR, HFI_IRQ_MASK);
 
 	if (status & HFI_IRQ_DBGQ_MASK)
 		tasklet_hi_schedule(&hfi->tasklet);

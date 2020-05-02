@@ -528,6 +528,8 @@
 		compatible = "qcom,rpmh-arc-regulator";
 		mboxes = <&apps_rsc 0>;
 		qcom,resource-name = "mx.lvl";
+		pm8150l_s4_mmcx_sup_level-parent-supply =
+						<&VDD_CX_MMCX_SUPPLY_LEVEL>;
 
 		VDD_MX_LEVEL: S4C_LEVEL:
 		pm8150l_s4_level: regulator-pm8150l-s4-level {
@@ -553,6 +555,17 @@
 				= <RPMH_REGULATOR_LEVEL_RETENTION>;
 		};
 
+		VDD_MX_MMCX_SUPPLY_LEVEL: regulator-pm8150l-s4-mmcx-sup-level {
+			regulator-name = "pm8150l_s4_mmcx_sup_level";
+			qcom,set = <RPMH_REGULATOR_SET_ALL>;
+			regulator-min-microvolt =
+				<RPMH_REGULATOR_LEVEL_RETENTION>;
+			regulator-max-microvolt =
+				<RPMH_REGULATOR_LEVEL_MAX>;
+			qcom,init-voltage-level =
+				<RPMH_REGULATOR_LEVEL_RETENTION>;
+		};
+
 		mx_cdev: mx-cdev-lvl {
 			compatible = "qcom,regulator-cooling-device";
 			regulator-cdev-supply = <&VDD_MX_LEVEL>;
@@ -567,6 +580,7 @@
 		compatible = "qcom,rpmh-arc-regulator";
 		mboxes = <&apps_rsc 0>;
 		qcom,resource-name = "mmcx.lvl";
+		pm8150l_s5_level-parent-supply = <&VDD_MX_MMCX_SUPPLY_LEVEL>;
 
 		VDD_MMCX_LEVEL: S5C_LEVEL:
 		pm8150l_s5_level: regulator-pm8150l-s5-level {
@@ -578,6 +592,7 @@
 				= <RPMH_REGULATOR_LEVEL_MAX>;
 			qcom,init-voltage-level
 				= <RPMH_REGULATOR_LEVEL_LOW_SVS>;
+			qcom,min-dropout-voltage-level = <(-1)>;
 		};
 
 		VDD_MMCX_LEVEL_AO: S5C_LEVEL_AO:
@@ -619,6 +634,7 @@
 		qcom,resource-name = "cx.lvl";
 		pm8150l_s6_level-parent-supply = <&VDD_MX_LEVEL>;
 		pm8150l_s6_level_ao-parent-supply = <&VDD_MX_LEVEL_AO>;
+		proxy-supply = <&VDD_CX_MMCX_SUPPLY_LEVEL>;
 
 		VDD_CX_LEVEL: S6C_LEVEL:
 		pm8150l_s6_level: regulator-pm8150l-s6-level {
@@ -644,6 +660,21 @@
 			qcom,init-voltage-level
 				= <RPMH_REGULATOR_LEVEL_RETENTION>;
 			qcom,min-dropout-voltage-level = <(-1)>;
+		};
+
+		VDD_CX_MMCX_SUPPLY_LEVEL: regulator-pm8150l-s6-mmcx-sup-level {
+			regulator-name = "pm8150l_s6_mmcx_sup_level";
+			qcom,set = <RPMH_REGULATOR_SET_ALL>;
+			regulator-min-microvolt =
+				<RPMH_REGULATOR_LEVEL_MIN_SVS>;
+			regulator-max-microvolt =
+				<RPMH_REGULATOR_LEVEL_MAX>;
+			qcom,init-voltage-level =
+				<RPMH_REGULATOR_LEVEL_MIN_SVS>;
+			qcom,proxy-consumer-enable;
+			qcom,proxy-consumer-voltage
+				= <RPMH_REGULATOR_LEVEL_TURBO
+				   RPMH_REGULATOR_LEVEL_MAX>;
 		};
 
 		cx_cdev: regulator-cdev {
@@ -839,9 +870,9 @@
 		L10C: pm8150l_l10: regulator-pm8150l-l10 {
 			regulator-name = "pm8150l_l10";
 			qcom,set = <RPMH_REGULATOR_SET_ALL>;
-			regulator-min-microvolt = <3000000>;
-			regulator-max-microvolt = <3312000>;
-			qcom,init-voltage = <3000000>;
+			regulator-min-microvolt = <1800000>;
+			regulator-max-microvolt = <1800000>;
+			qcom,init-voltage = <1800000>;
 			qcom,init-mode = <RPMH_REGULATOR_MODE_LPM>;
 		};
 	};

@@ -579,8 +579,13 @@ EXPORT_SYMBOL(bio_phys_segments);
 
 static inline void bio_clone_crypt_key(struct bio *dst, const struct bio *src)
 {
-#ifdef CONFIG_PFK
+#ifdef CONFIG_BLK_DEV_CRYPT
+#ifdef CONFIG_BLK_DEV_CRYPT_DUN
 	dst->bi_iter.bi_dun = src->bi_iter.bi_dun;
+#endif
+	dst->bi_cryptd = src->bi_cryptd;
+#endif
+#ifdef CONFIG_PFK
 #ifdef CONFIG_DM_DEFAULT_KEY
 	dst->bi_crypt_key = src->bi_crypt_key;
 	dst->bi_crypt_skip = src->bi_crypt_skip;

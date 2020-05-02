@@ -14,6 +14,8 @@
 #include <net/pkt_sched.h>
 #include <soc/qcom/rmnet_qmi.h>
 #include <soc/qcom/qmi_rmnet.h>
+#include <linux/netlog.h>
+
 #include "dfc_defs.h"
 
 #define CREATE_TRACE_POINTS
@@ -937,6 +939,10 @@ int dfc_bearer_flow_ctl(struct net_device *dev,
 					 bearer->grant_size,
 					 qlen, i, enable);
 			rc++;
+					
+			net_log("m=%d b=%u gr=%u q=%d %s",
+				qos->mux_id, bearer->bearer_id, bearer->grant_size,
+				i, enable ? "en" : "dis");
 		}
 	}
 
@@ -979,6 +985,10 @@ static int dfc_all_bearer_flow_ctl(struct net_device *dev,
 				 fc_info->num_bytes,
 				 qlen, i, enable);
 		rc++;
+		
+		net_log("A: m=%d b=%u gr=%u q=%d %s",
+			fc_info->mux_id, bearer_itm->bearer_id, fc_info->num_bytes,
+			i, enable ? "en" : "dis");
 	}
 
 	if (enable == 0 && ack_req)
@@ -1029,8 +1039,13 @@ static int dfc_update_fc_map(struct net_device *dev, struct qos_info *qos,
 		itm->last_grant = fc_info->num_bytes;
 		itm->last_seq = fc_info->seq_num;
 
-		if (action)
+		if (action) {
+			net_log("I> m=%d b=%d gr=%d s=%d a=%d\n",
+				fc_info->mux_id, fc_info->bearer_id,
+				fc_info->num_bytes, fc_info->seq_num,
+				ancillary);
 			rc = dfc_bearer_flow_ctl(dev, itm, qos);
+		}
 	} else {
 		pr_debug("grant %u before flow activate", fc_info->num_bytes);
 		qos->default_grant = fc_info->num_bytes;
@@ -1090,10 +1105,14 @@ void dfc_do_burst_flow_control(struct dfc_qmi_data *dfc,
 			continue;
 		}
 
-		if (unlikely(flow_status->bearer_id == 0xFF))
+		if (unlikely(flow_status->bearer_id == 0xFF)) {
+			net_log("I> m=%d b=%d gr=%d s=%d a=%d\n",
+				flow_status->mux_id, flow_status->bearer_id,
+				flow_status->num_bytes, flow_status->seq_num,
+				ancillary);			
 			dfc_all_bearer_flow_ctl(
 				dev, qos, ack_req, ancillary, flow_status);
-		else
+		} else
 			dfc_update_fc_map(
 				dev, qos, ack_req, ancillary, flow_status);
 
@@ -1114,6 +1133,9 @@ static void dfc_update_tx_link_status(struct net_device *dev,
 	if (!itm)
 		return;
 
+	net_log("Link> %s, b=%d, gr=%d, rs=%d, status %d\n", dev->name,
+		binfo->bearer_id, itm->grant_size, itm->rat_switch, tx_status);
+		
 	/* If no change in tx status, ignore */
 	if (itm->tx_off == !tx_status)
 		return;
