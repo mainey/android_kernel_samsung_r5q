@@ -86,6 +86,7 @@ static void set_aod_rect(void *device_data);
 static void get_aod_rect(void *device_data);
 static void aod_enable(void *device_data);
 static void aot_enable(void *device_data);
+static void fod_lp_mode(void *device_data);
 static void fod_enable(void *device_data);
 static void set_fod_rect(void *device_data);
 static void singletap_enable(void *device_data);
@@ -189,7 +190,8 @@ static struct sec_cmd sec_cmds[] = {
 	{SEC_CMD("get_aod_rect", get_aod_rect),},
 	{SEC_CMD_H("aod_enable", aod_enable),},
 	{SEC_CMD_H("aot_enable", aot_enable),},
-	{SEC_CMD_H("fod_enable", fod_enable),},
+	{SEC_CMD_H("fod_lp_mode", fod_lp_mode),},
+	{SEC_CMD("fod_enable", fod_enable),},
 	{SEC_CMD_H("set_fod_rect", set_fod_rect),},
 	{SEC_CMD_H("singletap_enable", singletap_enable),},
 	{SEC_CMD("set_grip_data", set_grip_data),},
@@ -5786,8 +5788,6 @@ static void set_aod_rect(void *device_data)
 			__func__, sec->cmd_param[0], sec->cmd_param[1],
 			sec->cmd_param[2], sec->cmd_param[3], ts->lowpower_mode);
 
-		ts->lowpower_mode |= SEC_TS_MODE_SPONGE_AOD;
-
 	for (i = 0; i < 4; i++)
 		ts->rect_data[i] = sec->cmd_param[i];
 
@@ -6010,6 +6010,24 @@ NG:
 	sec_cmd_set_cmd_exit(sec);
 }
 
+static void fod_lp_mode(void *device_data)
+{
+	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
+	struct sec_ts_data *ts = container_of(sec, struct sec_ts_data, sec);
+	char buff[64] = { 0 };
+
+	sec_cmd_set_default_result(sec);
+
+	ts->fod_lp_mode = sec->cmd_param[0];
+
+	input_info(true, &ts->client->dev, "%s: fod_lp_mode %d\n", __func__, ts->fod_lp_mode);
+
+	snprintf(buff, sizeof(buff), "%s", "OK");
+	sec_cmd_set_cmd_result(sec, buff, strnlen(buff, sizeof(buff)));
+	sec->cmd_state = SEC_CMD_STATUS_OK;
+	sec_cmd_set_cmd_exit(sec);
+}
+
 static void fod_enable(void *device_data)
 {
 	struct sec_cmd_data *sec = (struct sec_cmd_data *)device_data;
@@ -6044,7 +6062,7 @@ static void fod_enable(void *device_data)
 			ts->press_prop, ts->lowpower_mode);
 
 	mutex_lock(&ts->modechange);
-	if (ts->input_closed && !ts->lowpower_mode && !ts->ed_enable) {
+	if (ts->input_closed && !ts->lowpower_mode && !ts->ed_enable && !ts->fod_lp_mode) {
 		if (device_may_wakeup(&ts->client->dev) && ts->power_status == SEC_TS_STATE_LPM)
 			disable_irq_wake(ts->client->irq);
 		sec_ts_stop_device(ts);

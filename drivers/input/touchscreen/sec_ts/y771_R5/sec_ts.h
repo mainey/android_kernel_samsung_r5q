@@ -732,7 +732,7 @@ struct sec_ts_data {
 	struct sec_ts_plat_data *plat_data;
 	struct sec_ts_coordinate coord[MAX_SUPPORT_TOUCH_COUNT + MAX_SUPPORT_HOVER_COUNT];
 
-
+	u8 fod_lp_mode;
 	u8 lowpower_mode;
 	u8 brush_mode;
 	u8 touchable_area;

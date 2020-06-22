@@ -3094,7 +3094,7 @@ static void sec_ts_reset_work(struct work_struct *work)
 	if (ts->input_dev_touch->disabled) {
 		input_err(true, &ts->client->dev, "%s: call input_close\n", __func__);
 
-		if (ts->lowpower_mode || ts->ed_enable) {
+		if (ts->lowpower_mode || ts->ed_enable || ts->fod_lp_mode) {
 			ret = sec_ts_set_lowpowermode(ts, TO_LOWPOWER_MODE);
 			if (ret < 0) {
 				input_err(true, &ts->client->dev, "%s: failed to reset, ret:%d\n", __func__, ret);
@@ -3364,7 +3364,7 @@ static void sec_ts_input_close(struct input_dev *dev)
 	cancel_delayed_work(&ts->reset_work);
 #endif
 
-	if (ts->lowpower_mode || ts->ed_enable)
+	if (ts->lowpower_mode || ts->ed_enable || ts->fod_lp_mode)
 		sec_ts_set_lowpowermode(ts, TO_LOWPOWER_MODE);
 	else
 		sec_ts_stop_device(ts);
@@ -3551,8 +3551,7 @@ static int sec_ts_pm_suspend(struct device *dev)
 
 out:
 #endif
-	if (ts->lowpower_mode)
-		reinit_completion(&ts->resume_done);
+	reinit_completion(&ts->resume_done);
 
 	return 0;
 }
@@ -3561,8 +3560,7 @@ static int sec_ts_pm_resume(struct device *dev)
 {
 	struct sec_ts_data *ts = dev_get_drvdata(dev);
 
-	if (ts->lowpower_mode)
-		complete_all(&ts->resume_done);
+	complete_all(&ts->resume_done);
 
 	return 0;
 }
