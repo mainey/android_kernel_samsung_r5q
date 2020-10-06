@@ -22,6 +22,9 @@
 #include "dp_usbpd.h"
 #include "dp_gpio_hpd.h"
 #include "dp_lphw_hpd.h"
+#ifdef CONFIG_SEC_DISPLAYPORT
+#include "secdp.h"
+#endif
 
 static void dp_hpd_host_init(struct dp_hpd *dp_hpd,
 		struct dp_catalog_hpd *catalog)
@@ -47,10 +50,13 @@ static void dp_hpd_isr(struct dp_hpd *dp_hpd)
 {
 }
 
+
 struct dp_hpd *dp_hpd_get(struct device *dev, struct dp_parser *parser,
 		struct dp_catalog_hpd *catalog, struct dp_hpd_cb *cb)
 {
 	struct dp_hpd *dp_hpd;
+
+	pr_debug("+++, no_aux_switch<%d>\n", parser->no_aux_switch);
 
 	if (parser->no_aux_switch && parser->lphw_hpd) {
 		dp_hpd = dp_lphw_hpd_get(dev, parser, catalog, cb);
@@ -67,13 +73,19 @@ struct dp_hpd *dp_hpd_get(struct device *dev, struct dp_parser *parser,
 		}
 		dp_hpd->type = DP_HPD_GPIO;
 	} else {
+#ifndef CONFIG_SEC_DISPLAYPORT
 		dp_hpd = dp_usbpd_get(dev, cb);
+#else
+		dp_hpd = secdp_usbpd_get(dev, cb);
+#endif
 		if (IS_ERR(dp_hpd)) {
 			pr_err("failed to get usbpd\n");
 			goto out;
 		}
 		dp_hpd->type = DP_HPD_USBPD;
 	}
+
+	pr_debug("type<%d>\n", dp_hpd->type);
 
 	if (!dp_hpd->host_init)
 		dp_hpd->host_init	= dp_hpd_host_init;
@@ -90,6 +102,8 @@ void dp_hpd_put(struct dp_hpd *dp_hpd)
 {
 	if (!dp_hpd)
 		return;
+
+	pr_debug("+++\n");
 
 	switch (dp_hpd->type) {
 	case DP_HPD_USBPD:

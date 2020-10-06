@@ -12,12 +12,18 @@
 #ifndef _FSCRYPT_PRIVATE_H
 #define _FSCRYPT_PRIVATE_H
 
-#ifndef __FS_HAS_ENCRYPTION
 #define __FS_HAS_ENCRYPTION 1
-#endif
 #include <linux/fscrypt.h>
 #include <crypto/hash.h>
-#include <linux/pfk.h>
+
+#if defined(CONFIG_FSCRYPT_SDP) || defined(CONFIG_DDAR)
+#include "fscrypt_knox_private.h"
+#endif
+
+#ifdef CONFIG_FSCRYPT_SDP
+#include "sdp/fscrypto_sdp_private.h"
+#include <sdp/fs_request.h>
+#endif
 
 /* Encryption parameters */
 #define FS_KEY_DERIVATION_NONCE_SIZE	16
@@ -40,6 +46,9 @@ struct fscrypt_context {
 	u8 flags;
 	u8 master_key_descriptor[FS_KEY_DESCRIPTOR_SIZE];
 	u8 nonce[FS_KEY_DERIVATION_NONCE_SIZE];
+#if defined(CONFIG_FSCRYPT_SDP) || defined(CONFIG_DDAR)
+	u32 knox_flags;
+#endif
 } __packed;
 
 #define FS_ENCRYPTION_CONTEXT_FORMAT_V1		1
@@ -84,13 +93,26 @@ struct fscrypt_info {
 	 */
 	struct fscrypt_master_key *ci_master_key;
 
+#ifdef CONFIG_FS_INLINE_ENCRYPTION
+	void *ci_private;	/* private data for inline encryption */
+#endif
+#ifdef CONFIG_FS_CRYPTO_SEC_EXTENSION
+	u8 ci_iv_key[FS_CRYPTO_BLOCK_SIZE];
+#endif
+
+#ifdef CONFIG_DDAR
+	struct dd_info *ci_dd_info;
+#endif
+#ifdef CONFIG_FSCRYPT_SDP
+	struct sdp_info *ci_sdp_info;
+#endif
+
 	/* fields from the fscrypt_context */
 	u8 ci_data_mode;
 	u8 ci_filename_mode;
 	u8 ci_flags;
 	u8 ci_master_key_descriptor[FS_KEY_DESCRIPTOR_SIZE];
 	u8 ci_nonce[FS_KEY_DERIVATION_NONCE_SIZE];
-	u8 ci_raw_key[FS_MAX_KEY_SIZE];
 };
 
 typedef enum {
@@ -101,18 +123,29 @@ typedef enum {
 #define FS_CTX_REQUIRES_FREE_ENCRYPT_FL		0x00000001
 #define FS_CTX_HAS_BOUNCE_BUFFER_FL		0x00000002
 
+static inline bool fscrypt_valid_inline_enc_modes(u32 contents_mode,
+						  u32 filenames_mode)
+{
+#ifdef CONFIG_FS_INLINE_ENCRYPTION
+	if (contents_mode == FS_ENCRYPTION_MODE_PRIVATE &&
+	    filenames_mode == FS_ENCRYPTION_MODE_AES_256_CTS)
+		return true;
+#endif
+
+	return false;
+}
+
 static inline bool fscrypt_valid_enc_modes(u32 contents_mode,
 					   u32 filenames_mode)
 {
+	if (fscrypt_valid_inline_enc_modes(contents_mode, filenames_mode))
+		return true;
+
 	if (contents_mode == FS_ENCRYPTION_MODE_AES_128_CBC &&
 	    filenames_mode == FS_ENCRYPTION_MODE_AES_128_CTS)
 		return true;
 
 	if (contents_mode == FS_ENCRYPTION_MODE_AES_256_XTS &&
-	    filenames_mode == FS_ENCRYPTION_MODE_AES_256_CTS)
-		return true;
-
-	if (contents_mode == FS_ENCRYPTION_MODE_PRIVATE &&
 	    filenames_mode == FS_ENCRYPTION_MODE_AES_256_CTS)
 		return true;
 
@@ -123,9 +156,14 @@ static inline bool fscrypt_valid_enc_modes(u32 contents_mode,
 	return false;
 }
 
-static inline bool is_private_data_mode(const struct fscrypt_context *ctx)
+static inline bool __fscrypt_inline_encrypted(const struct inode *inode)
 {
-	return ctx->contents_encryption_mode == FS_ENCRYPTION_MODE_PRIVATE;
+#ifdef CONFIG_FS_INLINE_ENCRYPTION
+	if (inode && S_ISREG(inode->i_mode) &&
+	    IS_ENCRYPTED(inode) && inode->i_crypt_info)
+		return inode->i_crypt_info->ci_private ? true : false;
+#endif
+	return false;
 }
 
 /* crypto.c */
@@ -139,6 +177,7 @@ extern int fscrypt_do_page_crypto(const struct inode *inode,
 				  gfp_t gfp_flags);
 extern struct page *fscrypt_alloc_bounce_page(struct fscrypt_ctx *ctx,
 					      gfp_t gfp_flags);
+extern void fscrypt_free_bounce_page(void *pool);
 extern const struct dentry_operations fscrypt_d_ops;
 
 extern void __printf(3, 4) __cold
@@ -177,6 +216,7 @@ extern bool fscrypt_fname_encrypted_size(const struct inode *inode,
 struct fscrypt_mode {
 	const char *friendly_name;
 	const char *cipher_str;
+	bool inline_enc;
 	int keysize;
 	int ivsize;
 	bool logged_impl_name;

@@ -12,7 +12,7 @@
  *
  */
 
-#define pr_fmt(fmt)	"[drm-dp]: %s: " fmt, __func__
+#define pr_fmt(fmt)	"[drm-dp] %s: " fmt, __func__
 
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_atomic.h>
@@ -23,6 +23,10 @@
 #include "sde_connector.h"
 #include "dp_drm.h"
 #include "dp_debug.h"
+#ifdef CONFIG_SEC_DISPLAYPORT
+#include "secdp.h"
+#define DP_ENUM_STR(x)	#x
+#endif
 
 #define DP_MST_DEBUG(fmt, ...) pr_debug(fmt, ##__VA_ARGS__)
 
@@ -94,6 +98,8 @@ static void dp_bridge_pre_enable(struct drm_bridge *drm_bridge)
 		return;
 	}
 
+	pr_debug("+++\n");
+
 	bridge = to_dp_bridge(drm_bridge);
 	dp = bridge->display;
 
@@ -144,6 +150,8 @@ static void dp_bridge_enable(struct drm_bridge *drm_bridge)
 		return;
 	}
 
+	pr_debug("+++\n");
+
 	bridge = to_dp_bridge(drm_bridge);
 	if (!bridge->connector) {
 		pr_err("Invalid connector\n");
@@ -173,6 +181,8 @@ static void dp_bridge_disable(struct drm_bridge *drm_bridge)
 		pr_err("Invalid params\n");
 		return;
 	}
+
+	pr_debug("+++\n");
 
 	bridge = to_dp_bridge(drm_bridge);
 	if (!bridge->connector) {
@@ -212,6 +222,8 @@ static void dp_bridge_post_disable(struct drm_bridge *drm_bridge)
 		pr_err("Invalid params\n");
 		return;
 	}
+
+	pr_debug("+++\n");
 
 	bridge = to_dp_bridge(drm_bridge);
 	if (!bridge->connector) {
@@ -367,8 +379,6 @@ int dp_connector_get_mode_info(struct drm_connector *connector,
 		struct msm_mode_info *mode_info,
 		u32 max_mixer_width, void *display)
 {
-	const u32 dual_lm = 2;
-	const u32 single_lm = 1;
 	const u32 single_intf = 1;
 	const u32 no_enc = 0;
 	struct msm_display_topology *topology;
@@ -376,6 +386,8 @@ int dp_connector_get_mode_info(struct drm_connector *connector,
 	struct dp_panel *dp_panel;
 	struct dp_display_mode dp_mode;
 	struct dp_display *dp_disp = display;
+	struct msm_drm_private *priv;
+	int rc = 0;
 
 	if (!drm_mode || !mode_info || !max_mixer_width || !connector ||
 			!display) {
@@ -387,10 +399,17 @@ int dp_connector_get_mode_info(struct drm_connector *connector,
 
 	sde_conn = to_sde_connector(connector);
 	dp_panel = sde_conn->drv_panel;
+	priv = connector->dev->dev_private;
 
 	topology = &mode_info->topology;
-	topology->num_lm = (max_mixer_width < drm_mode->hdisplay) ?
-							dual_lm : single_lm;
+
+	rc = msm_get_mixer_count(priv, drm_mode, max_mixer_width,
+			&topology->num_lm);
+	if (rc) {
+		pr_err("error getting mixer count, rc:%d\n", rc);
+		return rc;
+	}
+
 	topology->num_enc = no_enc;
 	topology->num_intf = single_intf;
 

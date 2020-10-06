@@ -6829,7 +6829,11 @@ int __dev_change_flags(struct net_device *dev, unsigned int flags)
 
 	dev->flags = (flags & (IFF_DEBUG | IFF_NOTRAILERS | IFF_NOARP |
 			       IFF_DYNAMIC | IFF_MULTICAST | IFF_PORTSEL |
-			       IFF_AUTOMEDIA)) |
+			       IFF_AUTOMEDIA
+#ifdef CONFIG_MPTCP
+					 | IFF_NOMULTIPATH | IFF_MPBACKUP
+#endif
+)) |
 		     (dev->flags & (IFF_UP | IFF_VOLATILE | IFF_PROMISC |
 				    IFF_ALLMULTI));
 
@@ -7925,6 +7929,18 @@ static void netdev_wait_allrefs(struct net_device *dev)
 		msleep(250);
 
 		refcnt = netdev_refcnt_read(dev);
+
+		if (time_after(jiffies, warning_time + 5 * HZ)) {
+			/*
+			 * rmnet dev hold will not move on to next creation,
+			 * fix refcnt and let it go to free_netdev()
+			 */
+			if (refcnt && strstr(dev->name, "rmnet")) {
+				do {
+					dev_put(dev);
+				} while (netdev_refcnt_read(dev) > 0);
+			}
+		}
 
 		if (time_after(jiffies, warning_time + 10 * HZ)) {
 			pr_emerg("unregister_netdevice: waiting for %s to become free. Usage count = %d\n",

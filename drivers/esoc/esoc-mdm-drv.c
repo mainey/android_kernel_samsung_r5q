@@ -117,7 +117,7 @@ static int esoc_msm_restart_handler(struct notifier_block *nb,
 	struct esoc_clink *esoc_clink = mdm_drv->esoc_clink;
 	const struct esoc_clink_ops *const clink_ops = esoc_clink->clink_ops;
 
-	if (action == SYS_RESTART) {
+	if (action == SYS_RESTART || action == SYS_POWER_OFF) {
 		if (mdm_dbg_stall_notify(ESOC_PRIMARY_REBOOT))
 			return NOTIFY_OK;
 		mutex_lock(&mdm_drv->poff_lock);
@@ -137,6 +137,32 @@ static int esoc_msm_restart_handler(struct notifier_block *nb,
 	}
 	return NOTIFY_OK;
 }
+
+static void print_pmic_status(struct esoc_clink *esoc_clink) {
+	struct mdm_ctrl *mdm;
+
+	if (!esoc_clink)
+		goto err;
+
+	mdm = get_esoc_clink_data(esoc_clink);
+	if (!mdm)
+		goto err;
+
+	if (gpio_is_valid(MDM_GPIO(mdm, MDM_PMIC_PWR_STATUS))) {
+		esoc_mdm_log("MDM PMIC value: %d\n",
+				gpio_get_value(MDM_GPIO(mdm, MDM_PMIC_PWR_STATUS)));
+		dev_err(&esoc_clink->dev, "MDM PMIC value: %d\n",
+				gpio_get_value(MDM_GPIO(mdm, MDM_PMIC_PWR_STATUS)));
+	}
+	else
+		dev_err(&esoc_clink->dev, "MDM PMIC GPIO is not supported\n");
+
+	return;
+err:
+	pr_err("%s: not initialized\n", __func__);
+	return;
+}
+
 static void mdm_handle_clink_evt(enum esoc_evt evt,
 					struct esoc_eng *eng)
 {
@@ -170,6 +196,8 @@ static void mdm_handle_clink_evt(enum esoc_evt evt,
 		if (!unexpected_state)
 			esoc_mdm_log("evt_state: ESOC_ERR_FATAL\n");
 
+		print_pmic_status(mdm_drv->esoc_clink);
+
 		/*
 		 * Modem can crash while we are waiting for pon_done during
 		 * a subsystem_get(). Setting mode to CRASH will prevent a
@@ -184,6 +212,7 @@ static void mdm_handle_clink_evt(enum esoc_evt evt,
 			esoc_mdm_log("Modem not up. Ignoring.\n");
 		if (mdm_drv->mode == CRASH || mdm_drv->mode != RUN)
 			return;
+		mdm_drv->mode = CRASH;
 		queue_work(mdm_drv->mdm_queue, &mdm_drv->ssr_work);
 		break;
 	case ESOC_REQ_ENG_ON:
@@ -205,8 +234,7 @@ static void mdm_ssr_fn(struct work_struct *work)
 
 	mdm_wait_for_status_low(mdm, false);
 
-	esoc_mdm_log("Starting SSR work and setting crash state\n");
-	mdm_drv->mode = CRASH;
+	esoc_mdm_log("Starting SSR work\n");
 
 	/*
 	 * If restarting esoc fails, the SSR framework triggers a kernel panic
@@ -289,12 +317,14 @@ static int mdm_subsys_shutdown(const struct subsys_desc *crashed_subsys,
 	 container_of(crashed_subsys, struct esoc_clink, subsys);
 	struct mdm_drv *mdm_drv = esoc_get_drv_data(esoc_clink);
 	const struct esoc_clink_ops * const clink_ops = esoc_clink->clink_ops;
+	struct mdm_ctrl *mdm = get_esoc_clink_data(mdm_drv->esoc_clink);
 
 	esoc_mdm_log("Shutdown request from SSR\n");
 
 	mutex_lock(&mdm_drv->poff_lock);
 	if (mdm_drv->mode == CRASH || mdm_drv->mode == PEER_CRASH) {
 		esoc_mdm_log("Shutdown in crash mode\n");
+		mdm_wait_for_status_low(mdm, false);
 		if (mdm_dbg_stall_cmd(ESOC_PREPARE_DEBUG)) {
 			/* We want to mask debug command.
 			 * In this case return success
@@ -377,6 +407,8 @@ static int mdm_handle_boot_fail(struct esoc_clink *esoc_clink, u8 *pon_trial)
 	struct mdm_ctrl *mdm = get_esoc_clink_data(esoc_clink);
 	struct mdm_drv *mdm_drv = esoc_get_drv_data(esoc_clink);
 
+	print_pmic_status(esoc_clink);
+
 	if (*pon_trial == atomic_read(&mdm_drv->n_pon_tries)) {
 		esoc_mdm_log("Reached max. number of boot trials\n");
 		atomic_set(&mdm_drv->boot_fail_action,
@@ -411,7 +443,7 @@ static int mdm_handle_boot_fail(struct esoc_clink *esoc_clink, u8 *pon_trial)
 		break;
 	case BOOT_FAIL_ACTION_PANIC:
 		esoc_mdm_log("Calling panic!!\n");
-		panic("Panic requested on external modem boot failure\n");
+		panic("Panic requested on external_modem boot failure\n");
 		break;
 	case BOOT_FAIL_ACTION_NOP:
 		esoc_mdm_log("Leaving the modem in its curent state\n");

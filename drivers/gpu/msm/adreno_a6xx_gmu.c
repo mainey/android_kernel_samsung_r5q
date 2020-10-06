@@ -295,7 +295,7 @@ static void a6xx_gmu_power_config(struct kgsl_device *device)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct gmu_device *gmu = KGSL_GMU_DEVICE(device);
-
+ 
 	/* Configure registers for idle setting. The setting is cumulative */
 
 	/* Disable GMU WB/RB buffer and caches at boot */
@@ -1183,6 +1183,13 @@ static int a6xx_gmu_suspend(struct kgsl_device *device)
 	/* Check no outstanding RPMh voting */
 	a6xx_complete_rpmh_votes(device);
 
+	/* Clear the WRITEDROPPED fields and set fence to allow mode */ 
+	gmu_core_regwrite(device, A6XX_GMU_AHB_FENCE_STATUS_CLR, 0x7); 
+	gmu_core_regwrite(device, A6XX_GMU_AO_AHB_FENCE_CTRL, 0); 
+ 
+	/* Make sure above writes are committed before we proceed to recovery */ 
+	wmb(); 
+
 	/*
 	 * This is based on the assumption that GMU is the only one controlling
 	 * the GX HS. This code path is the only client voting for GX through
@@ -1553,6 +1560,11 @@ static void a6xx_gmu_snapshot(struct adreno_device *adreno_dev,
 
 	if (!gmu_core_isenabled(device))
 		return;
+
+#if 0
+	KGSL_DRV_ERR(device, "force return due to NOC error\n");
+	return;
+#endif
 
 	for (i = 0; i < ARRAY_SIZE(desc); i++) {
 		if (desc[i].memdesc)

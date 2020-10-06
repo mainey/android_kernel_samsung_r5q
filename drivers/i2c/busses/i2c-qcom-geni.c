@@ -209,7 +209,7 @@ static inline void qcom_geni_i2c_calc_timeout(struct geni_i2c_dev *gi2c)
 							I2C_TIMEOUT_MIN_USEC;
 
 	gi2c->xfer_timeout = usecs_to_jiffies(xfer_max_usec);
-
+	gi2c->xfer_timeout += 50;
 }
 
 static void geni_i2c_err(struct geni_i2c_dev *gi2c, int err)
@@ -245,6 +245,31 @@ static irqreturn_t geni_i2c_irq(int irq, void *dev)
 	u32 dm_rx_st = readl_relaxed(gi2c->base + SE_DMA_RX_IRQ_STAT);
 	u32 dma = readl_relaxed(gi2c->base + SE_GENI_DMA_MODE_EN);
 	struct i2c_msg *cur = gi2c->cur;
+
+    static int irq_count_400 = 0;
+    static int irq_count_409 = 0;
+    static int irq_count_410 = 0;
+    if (irq == 400 ) { //Please change the IRQ number accordingly based on the issue
+	  irq_count_400++;
+	  if (irq_count_400 % 10000 == 0) {
+	  dev_err(gi2c->dev, "%s, irq:%d, irq_count_400:%d\n",__func__, irq, irq_count_400);
+	  geni_se_dump_dbg_regs(&gi2c->i2c_rsc, gi2c->base, gi2c->ipcl);
+	  }
+	}
+    else if (irq == 409 ) { //Please change the IRQ number accordingly based on the issue
+	  irq_count_409++;
+	  if (irq_count_409 % 10000 == 0) {
+	  dev_err(gi2c->dev, "%s, irq:%d, irq_count_409:%d\n",__func__, irq, irq_count_409);
+	  geni_se_dump_dbg_regs(&gi2c->i2c_rsc, gi2c->base, gi2c->ipcl);
+	  }
+	}
+	  else if (irq == 410 ) { //Please change the IRQ number accordingly based on the issue
+	  irq_count_410++;
+	  if (irq_count_410 % 10000 == 0) {
+	  dev_err(gi2c->dev, "%s, irq:%d, irq_count_410:%d\n",__func__, irq, irq_count_410);
+	  geni_se_dump_dbg_regs(&gi2c->i2c_rsc, gi2c->base, gi2c->ipcl);
+	  }
+	}
 
 	if (!cur || (m_stat & M_CMD_FAILURE_EN) ||
 		    (dm_rx_st & (DM_I2C_CB_ERR)) ||
