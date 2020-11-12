@@ -1129,10 +1129,10 @@ policy_state usbpd_policy_snk_select_capability(struct policy_data *policy)
 
 	/* Charger W/A */
 	obj = &policy->tx_data_obj[0];
-	if (obj->request_data_object.object_position == 1)
-		pd_data->phy_ops.set_chg_lv_mode(pd_data, 5);
-	else if (obj->request_data_object.object_position == 2)
+	if (usbpd_manager_get_selected_voltage(pd_data, obj->request_data_object.object_position) >= 6900)
 		pd_data->phy_ops.set_chg_lv_mode(pd_data, 9);
+	else
+		pd_data->phy_ops.set_chg_lv_mode(pd_data, 5);	
 
 	/* Clear Interrupt Status */
 	pd_data->phy_ops.get_status(pd_data, MSG_GOODCRC);

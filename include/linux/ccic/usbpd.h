@@ -677,6 +677,7 @@ extern void usbpd_init_policy(struct usbpd_data *);
 
 extern void  usbpd_init_manager_val(struct usbpd_data *);
 extern int  usbpd_init_manager(struct usbpd_data *);
+extern int usbpd_manager_get_selected_voltage(struct usbpd_data *pd_data, int selected_pdo);
 extern void usbpd_manager_plug_attach(struct device *, muic_attached_dev_t);
 extern void usbpd_manager_plug_detach(struct device *dev, bool notify);
 extern void usbpd_manager_acc_detach(struct device *dev);

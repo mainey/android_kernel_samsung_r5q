@@ -23,6 +23,7 @@
 #include <linux/slab.h>
 
 #define VOLTAGE_9V	8000
+#define VOLTAGE_6P9V	6900
 #define VOLTAGE_5V	6000
 
 static enum power_supply_property s2mu106_pmeter_props[] = {
@@ -50,7 +51,7 @@ static int s2mu106_pm_enable(struct s2mu106_pmeter_data *pmeter,
 	u8 addr1 = S2MU106_PM_REQ_BOX_CO1;
 	u8 addr2 = S2MU106_PM_REQ_BOX_CO2;
 	u8 data1, data2;
-	
+
 	/* Default PM mode = continuous */
 	if (mode == REQUEST_RESPONSE_MODE) {
 		pr_info ("%s PM mode : Request Response mode (RR)\n", __func__);
@@ -389,16 +390,20 @@ static irqreturn_t s2mu106_vchgin_isr(int irq, void *data)
 	value.intval = voltage;
 
 	psy_do_property("muic-manager", set,
-		POWER_SUPPLY_PROP_AFC_CHARGER_MODE, value);
+		POWER_SUPPLY_PROP_PM_VCHGIN, value);
 
 	if (voltage >= VOLTAGE_9V) {
 		value.intval = 1;
 		psy_do_property("s2mu106-charger", set,
-			POWER_SUPPLY_PROP_AFC_CHARGER_MODE, value);
+			POWER_SUPPLY_PROP_PM_VCHGIN, value);
+	} else if (voltage >= VOLTAGE_6P9V) {
+		value.intval = 2;
+		psy_do_property("s2mu106-charger", set,
+			POWER_SUPPLY_PROP_PM_VCHGIN, value);
 	} else if (voltage <= VOLTAGE_5V) {
 		value.intval = 0;
 		psy_do_property("s2mu106-charger", set,
-			POWER_SUPPLY_PROP_AFC_CHARGER_MODE, value);
+			POWER_SUPPLY_PROP_PM_VCHGIN, value);
 	}
 
 	return IRQ_HANDLED;

@@ -378,7 +378,7 @@ static int s2mu106_hv_muic_set_chg_lv_mode(struct s2mu106_muic_data *muic_data,
 	}
 	psy_chg = muic_data->psy_chg;
 	if (!muic_data->psy_chg)
-		muic_data->psy_chg = get_power_supply_by_name("s2mu106-charger");
+		psy_chg = muic_data->psy_chg = get_power_supply_by_name("s2mu106-charger");
 
 	if (psy_chg) {
 		if (afc_status == S2MU106_AFC_5V_to_9V) {

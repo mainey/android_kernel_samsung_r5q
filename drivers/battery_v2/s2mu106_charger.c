@@ -835,18 +835,31 @@ static void s2mu106_set_charging_efficiency(struct s2mu106_charger_data *charger
 {
 	u8 data;
 
-	if (onoff) {
+	cancel_delayed_work(&charger->pmeter_2lv_work);		
+	cancel_delayed_work(&charger->pmeter_3lv_work);		
+
+	if (onoff == 1) {
 		s2mu106_update_reg(charger->i2c, 0x9E,
-			(charger->reg_0x9E & 0xF0) >> 4, 0x0F);
+				(charger->reg_0x9E & 0xF0) >> 4, 0x0F);
+		s2mu106_update_reg(charger->i2c, 0xAD, 0x04, 0x1F);
+
+		s2mu106_read_reg(charger->i2c, 0x9E, &data);
+		pr_info("%s, 9V TA Setting! : 0x9E = 0x%2x(0x%2x)\n",
+				__func__, data, charger->reg_0x9E);
+	} else if (onoff == 2) {
+		s2mu106_update_reg(charger->i2c, 0xAD, 0x04, 0x1F);
 	} else {
 		s2mu106_update_reg(charger->i2c, 0x9E,
-			(charger->reg_0x9E & 0x0F), 0x0F);
+				(charger->reg_0x9E & 0x0F), 0x0F);
 		s2mu106_update_reg(charger->i2c, 0xAD, 0x0F, 0x1F);
+
+		s2mu106_read_reg(charger->i2c, 0x9E, &data);
+		pr_info("%s, 5V TA Setting! : 0x9E = 0x%2x(0x%2x)\n",
+				__func__, data, charger->reg_0x9E);
 	}
 
-	s2mu106_read_reg(charger->i2c, 0x9E, &data);
-	pr_info("%s, %dV TA Setting! : 0x9E = 0x%2x(0x%2x)\n",
-		__func__, ((onoff == 1) ? 9 : 5), data, charger->reg_0x9E);
+	s2mu106_read_reg(charger->i2c, 0xAD, &data);
+	pr_info("%s, 0xAD = 0x%2x\n", __func__, data);
 }
 
 static void s2mu106_wdt_clear(struct s2mu106_charger_data *charger)
@@ -1285,15 +1298,21 @@ static int s2mu106_chg_set_property(struct power_supply *psy,
 		break;
 #endif
 	case POWER_SUPPLY_PROP_2LV_3LV_CHG_MODE:
+		cancel_delayed_work(&charger->pmeter_2lv_work);		
+		cancel_delayed_work(&charger->pmeter_3lv_work);
 		if (val->intval) {
 			pr_info("%s : 5V->9V\n", __func__);
 			s2mu106_update_reg(charger->i2c, 0xAD, 0x04, 0x1F);
+			queue_delayed_work(charger->charger_wqueue, &charger->pmeter_3lv_work,
+							msecs_to_jiffies(5000));
 		} else {
 			pr_info("%s : 9V->5V or detach\n", __func__);
 			s2mu106_update_reg(charger->i2c, 0xAD, 0x0F, 0x1F);
+			queue_delayed_work(charger->charger_wqueue, &charger->pmeter_2lv_work,
+							msecs_to_jiffies(5000));
 		}
 		break;
-	case POWER_SUPPLY_PROP_AFC_CHARGER_MODE:
+	case POWER_SUPPLY_PROP_PM_VCHGIN:
 		s2mu106_set_charging_efficiency(charger, val->intval);
 		break;
 	case POWER_SUPPLY_PROP_ENERGY_NOW:
@@ -1794,6 +1813,40 @@ static void reduce_input_current(struct s2mu106_charger_data *charger)
 	charger->ivr_on = true;
 }
 
+static void s2mu106_pmeter_3lv_check_work(struct work_struct *work)
+{
+	struct s2mu106_charger_data *charger = container_of(work,
+				struct s2mu106_charger_data, pmeter_3lv_work.work);
+	union power_supply_propval value;
+	int voltage;
+
+	psy_do_property("s2mu106_pmeter", get,
+			POWER_SUPPLY_PROP_VCHGIN, value);
+
+	voltage = value.intval;
+	if (voltage <= 6000) {
+		s2mu106_update_reg(charger->i2c, 0xAD, 0x0F, 0x1F);
+		pr_info("%s : AFC or PD TA boosting fail!\n", __func__);
+	}
+}
+
+static void s2mu106_pmeter_2lv_check_work(struct work_struct *work)
+{
+	struct s2mu106_charger_data *charger = container_of(work,
+				struct s2mu106_charger_data, pmeter_2lv_work.work);
+	union power_supply_propval value;
+	int voltage;
+
+	psy_do_property("s2mu106_pmeter", get,
+			POWER_SUPPLY_PROP_VCHGIN, value);
+
+	voltage = value.intval;
+	if (voltage >= 6900) {
+		s2mu106_update_reg(charger->i2c, 0xAD, 0x04, 0x1F);
+		pr_info("%s : AFC or PD TA 5V or detach fail!\n", __func__);
+	}
+}
+
 static void s2mu106_ivr_irq_work(struct work_struct *work)
 {
 	struct s2mu106_charger_data *charger = container_of(work,
@@ -2288,6 +2341,8 @@ static int s2mu106_charger_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&charger->otg_vbus_work, s2mu106_charger_otg_vbus_work);
 	INIT_DELAYED_WORK(&charger->ivr_work, s2mu106_ivr_irq_work);
 	INIT_DELAYED_WORK(&charger->wc_current_work, s2mu106_wc_current_work);
+	INIT_DELAYED_WORK(&charger->pmeter_3lv_work, s2mu106_pmeter_3lv_check_work);
+	INIT_DELAYED_WORK(&charger->pmeter_2lv_work, s2mu106_pmeter_2lv_check_work);
 
 	/*
 	 * irq request
