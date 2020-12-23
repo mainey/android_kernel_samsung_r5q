@@ -17,7 +17,6 @@
 #include "cam_vfe_bus.h"
 
 #define CAM_VFE_BUS_VER2_MAX_CLIENTS 24
-
 #define CAM_VFE_BUS_ENABLE_DMI_DUMP                     BIT(0)
 #define CAM_VFE_BUS_ENABLE_STATS_REG_DUMP               BIT(1)
 

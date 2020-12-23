@@ -118,9 +118,9 @@ struct cam_vfe_bus_ver2_common_data {
 	uint32_t                                    secure_mode;
 	uint32_t                                    num_sec_out;
 	uint32_t                                    addr_no_sync;
-	uint32_t                                    camera_hw_version;
 	struct cam_vfe_bus_ver2_stats_cfg_info     *stats_data;
 	uint32_t                                    enable_dmi_dump;
+	uint32_t                                    camera_hw_version;
 };
 
 struct cam_vfe_bus_ver2_wm_resource_data {
@@ -1283,8 +1283,8 @@ static int cam_vfe_bus_handle_wm_done_top_half(uint32_t evt_id,
 
 	rsrc_data = wm_res->res_priv;
 
-	CAM_DBG(CAM_ISP, "IRQ status_0 = 0x%x", th_payload->evt_status_arr[0]);
-	CAM_DBG(CAM_ISP, "IRQ status_1 = 0x%x", th_payload->evt_status_arr[1]);
+	CAM_QCLOGMINIMAL(CAM_ISP, "IRQ status_0 = 0x%x", th_payload->evt_status_arr[0]);
+	CAM_QCLOGMINIMAL(CAM_ISP, "IRQ status_1 = 0x%x", th_payload->evt_status_arr[1]);
 
 	rc  = cam_vfe_bus_get_evt_payload(rsrc_data->common_data, &evt_payload);
 	if (rc) {
@@ -1378,6 +1378,7 @@ static void cam_vfe_bus_dump_dmi_reg(
 	cam_io_w_mb(0, mem_base + dmi_cfg.addr_offset);
 }
 
+
 static int cam_vfe_bus_err_bottom_half(void *ctx_priv,
 	void *evt_payload_priv)
 {
@@ -1386,14 +1387,13 @@ static int cam_vfe_bus_err_bottom_half(void *ctx_priv,
 	struct cam_vfe_bus_ver2_stats_cfg_offset *stats_cfg;
 	struct cam_vfe_bus_ver2_dmi_offset_common dmi_cfg;
 	uint32_t val = 0;
-	uint32_t enable_dmi_dump;
 
 	if (!ctx_priv || !evt_payload_priv)
 		return -EINVAL;
 
 	evt_payload = evt_payload_priv;
 	common_data = evt_payload->ctx;
-	enable_dmi_dump = evt_payload->enable_dump;
+
 	stats_cfg = common_data->stats_data->stats_cfg_offset;
 	dmi_cfg = common_data->stats_data->dmi_offset_info;
 	val = evt_payload->debug_status_0;
@@ -1431,30 +1431,23 @@ static int cam_vfe_bus_err_bottom_half(void *ctx_priv,
 
 	if (val & 0x0400) {
 		CAM_INFO(CAM_ISP, "PDAF violation");
-		if (enable_dmi_dump & CAM_VFE_BUS_ENABLE_DMI_DUMP) {
-
-			cam_vfe_bus_dump_dmi_reg(
-			common_data->mem_base,
+		cam_vfe_bus_dump_dmi_reg(common_data->mem_base,
 			CAM_VFE_BUS_LUT_WORD_SIZE_64,
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_PDAF].lut.size,
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_PDAF].lut.bank_0,
 			dmi_cfg);
-		}
-		if (enable_dmi_dump & CAM_VFE_BUS_ENABLE_STATS_REG_DUMP) {
-			CAM_INFO(CAM_ISP, "RGN offset cfg 0x%08x",
-			cam_io_r_mb(common_data->mem_base +
+		CAM_INFO(CAM_ISP, "RGN offset cfg 0x%08x",
+
+		cam_io_r_mb(common_data->mem_base +
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_PDAF].cfg_offset));
-		}
 	}
 
 	if (val & 0x0800) {
 		CAM_INFO(CAM_ISP, "STATs HDR BE violation");
-		if (enable_dmi_dump & CAM_VFE_BUS_ENABLE_STATS_REG_DUMP) {
-
-			CAM_INFO(CAM_ISP, "RGN offset cfg 0x%08x",
+		CAM_INFO(CAM_ISP, "RGN offset cfg 0x%08x",
 			cam_io_r_mb(common_data->mem_base +
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_HDR_BE].cfg_offset));
@@ -1463,15 +1456,11 @@ static int cam_vfe_bus_err_bottom_half(void *ctx_priv,
 			cam_io_r_mb(common_data->mem_base +
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_HDR_BE].num_cfg));
-		}
 	}
 
 	if (val & 0x01000) {
 		CAM_INFO(CAM_ISP, "STATs HDR BHIST violation");
-		if (enable_dmi_dump & CAM_VFE_BUS_ENABLE_DMI_DUMP) {
-
-			cam_vfe_bus_dump_dmi_reg(
-			common_data->mem_base,
+		cam_vfe_bus_dump_dmi_reg(common_data->mem_base,
 			CAM_VFE_BUS_LUT_WORD_SIZE_64,
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_HDR_BHIST].lut.size,
@@ -1479,27 +1468,23 @@ static int cam_vfe_bus_err_bottom_half(void *ctx_priv,
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_HDR_BHIST].lut.bank_0,
 			dmi_cfg);
 
-			cam_vfe_bus_dump_dmi_reg(
-			common_data->mem_base,
+		cam_vfe_bus_dump_dmi_reg(common_data->mem_base,
 			CAM_VFE_BUS_LUT_WORD_SIZE_64,
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_HDR_BHIST].lut.size,
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_HDR_BHIST].lut.bank_1,
 			dmi_cfg);
-		}
-		if (enable_dmi_dump & CAM_VFE_BUS_ENABLE_STATS_REG_DUMP) {
 
-			CAM_INFO(CAM_ISP, "RGN offset cfg 0x%08x",
-			cam_io_r_mb(common_data->mem_base +
+		CAM_INFO(CAM_ISP, "RGN offset cfg 0x%08x",
+		cam_io_r_mb(common_data->mem_base +
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_HDR_BHIST].cfg_offset));
 
-			CAM_INFO(CAM_ISP, "RGN num cfg 0x%08x",
-			cam_io_r_mb(common_data->mem_base +
+		CAM_INFO(CAM_ISP, "RGN num cfg 0x%08x",
+		cam_io_r_mb(common_data->mem_base +
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_HDR_BHIST].num_cfg));
-		}
 	}
 
 	if (val & 0x02000)
@@ -1507,10 +1492,7 @@ static int cam_vfe_bus_err_bottom_half(void *ctx_priv,
 
 	if (val & 0x04000) {
 		CAM_INFO(CAM_ISP, "STATs BF violation");
-		if (enable_dmi_dump & CAM_VFE_BUS_ENABLE_DMI_DUMP) {
-
-			cam_vfe_bus_dump_dmi_reg(
-			common_data->mem_base,
+		cam_vfe_bus_dump_dmi_reg(common_data->mem_base,
 			CAM_VFE_BUS_LUT_WORD_SIZE_64,
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_BF].lut.size,
@@ -1518,112 +1500,95 @@ static int cam_vfe_bus_err_bottom_half(void *ctx_priv,
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_BF].lut.bank_0,
 			dmi_cfg);
 
-			cam_vfe_bus_dump_dmi_reg(
-			common_data->mem_base,
+		cam_vfe_bus_dump_dmi_reg(common_data->mem_base,
 			CAM_VFE_BUS_LUT_WORD_SIZE_64,
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_BF].lut.size,
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_BF].lut.bank_1,
 			dmi_cfg);
-		}
-		if (enable_dmi_dump & CAM_VFE_BUS_ENABLE_STATS_REG_DUMP) {
-			CAM_INFO(CAM_ISP, "RGN offset cfg 0x%08x",
-			cam_io_r_mb(common_data->mem_base +
+
+		CAM_INFO(CAM_ISP, "RGN offset cfg 0x%08x",
+		cam_io_r_mb(common_data->mem_base +
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_BF].cfg_offset));
-		}
 	}
 
 	if (val & 0x08000) {
 		CAM_INFO(CAM_ISP, "STATs AWB BG UBWC violation");
-		if (enable_dmi_dump & CAM_VFE_BUS_ENABLE_STATS_REG_DUMP) {
 
-			CAM_INFO(CAM_ISP, "RGN offset cfg 0x%08x",
-			cam_io_r_mb(common_data->mem_base +
-			stats_cfg[
-			CAM_VFE_BUS_VER2_VFE_OUT_STATS_AWB_BG].cfg_offset));
+		CAM_INFO(CAM_ISP, "RGN offset cfg 0x%08x",
+		cam_io_r_mb(common_data->mem_base +
+		stats_cfg[
+		CAM_VFE_BUS_VER2_VFE_OUT_STATS_AWB_BG].cfg_offset));
 
-			CAM_INFO(CAM_ISP, "RGN num cfg 0x%08x",
-			cam_io_r_mb(common_data->mem_base +
-			stats_cfg[
-			CAM_VFE_BUS_VER2_VFE_OUT_STATS_AWB_BG].num_cfg));
-		}
+		CAM_INFO(CAM_ISP, "RGN num cfg 0x%08x",
+		cam_io_r_mb(common_data->mem_base +
+		stats_cfg[
+		CAM_VFE_BUS_VER2_VFE_OUT_STATS_AWB_BG].num_cfg));
 	}
 
 	if (val & 0x010000) {
 		CAM_INFO(CAM_ISP, "STATs BHIST violation");
-		if (enable_dmi_dump & CAM_VFE_BUS_ENABLE_DMI_DUMP) {
-
-			cam_vfe_bus_dump_dmi_reg(
-			common_data->mem_base,
+		cam_vfe_bus_dump_dmi_reg(common_data->mem_base,
 			CAM_VFE_BUS_LUT_WORD_SIZE_64,
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_BHIST].lut.size,
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_BHIST].lut.bank_0,
 			dmi_cfg);
-		}
-		if (enable_dmi_dump & CAM_VFE_BUS_ENABLE_STATS_REG_DUMP) {
 
-			CAM_INFO(CAM_ISP, "RGN offset cfg 0x%08x",
-			cam_io_r_mb(common_data->mem_base +
+		CAM_INFO(CAM_ISP, "RGN offset cfg 0x%08x",
+		cam_io_r_mb(common_data->mem_base +
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_BHIST].cfg_offset));
 
-			CAM_INFO(CAM_ISP, "RGN num cfg 0x%08x",
-			cam_io_r_mb(common_data->mem_base +
+		CAM_INFO(CAM_ISP, "RGN num cfg 0x%08x",
+		cam_io_r_mb(common_data->mem_base +
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_BHIST].num_cfg));
-		}
 	}
 
 	if (val & 0x020000) {
 		CAM_INFO(CAM_ISP, "STATs RS violation");
-		if (enable_dmi_dump & CAM_VFE_BUS_ENABLE_STATS_REG_DUMP) {
 
-			CAM_INFO(CAM_ISP, "RGN offset cfg 0x%08x",
+		CAM_INFO(CAM_ISP, "RGN offset cfg 0x%08x",
 			cam_io_r_mb(common_data->mem_base +
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_RS].cfg_offset));
 
-			CAM_INFO(CAM_ISP, "RGN num cfg 0x%08x",
-			cam_io_r_mb(common_data->mem_base +
+		CAM_INFO(CAM_ISP, "RGN num cfg 0x%08x",
+		cam_io_r_mb(common_data->mem_base +
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_RS].num_cfg));
-		}
 	}
 
 	if (val & 0x040000) {
 		CAM_INFO(CAM_ISP, "STATs CS violation");
-		if (enable_dmi_dump & CAM_VFE_BUS_ENABLE_STATS_REG_DUMP) {
 
-			CAM_INFO(CAM_ISP, "RGN offset cfg 0x%08x",
-			cam_io_r_mb(common_data->mem_base +
+		CAM_INFO(CAM_ISP, "RGN offset cfg 0x%08x",
+		cam_io_r_mb(common_data->mem_base +
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_CS].cfg_offset));
 
-			CAM_INFO(CAM_ISP, "RGN num cfg 0x%08x",
-			cam_io_r_mb(common_data->mem_base +
+		CAM_INFO(CAM_ISP, "RGN num cfg 0x%08x",
+		cam_io_r_mb(common_data->mem_base +
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_CS].num_cfg));
-		}
 	}
 
 	if (val & 0x080000) {
 		CAM_INFO(CAM_ISP, "STATs IHIST violation");
-		if (enable_dmi_dump & CAM_VFE_BUS_ENABLE_STATS_REG_DUMP) {
 
-			CAM_INFO(CAM_ISP, "RGN offset cfg 0x%08x",
-			cam_io_r_mb(common_data->mem_base +
+		CAM_INFO(CAM_ISP, "RGN offset cfg 0x%08x",
+		cam_io_r_mb(common_data->mem_base +
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_IHIST].cfg_offset));
 
-			CAM_INFO(CAM_ISP, "RGN num cfg 0x%08x",
-			cam_io_r_mb(common_data->mem_base +
+		CAM_INFO(CAM_ISP, "RGN num cfg 0x%08x",
+		cam_io_r_mb(common_data->mem_base +
 			stats_cfg[
 			CAM_VFE_BUS_VER2_VFE_OUT_STATS_IHIST].num_cfg));
-		}
 	}
 
 	if (val & 0x0100000)
@@ -2037,9 +2002,9 @@ static int cam_vfe_bus_handle_comp_done_top_half(uint32_t evt_id,
 
 	rsrc_data = comp_grp->res_priv;
 
-	CAM_DBG(CAM_ISP, "IRQ status_0 = 0x%x", th_payload->evt_status_arr[0]);
-	CAM_DBG(CAM_ISP, "IRQ status_1 = 0x%x", th_payload->evt_status_arr[1]);
-	CAM_DBG(CAM_ISP, "IRQ status_2 = 0x%x", th_payload->evt_status_arr[2]);
+	CAM_QCLOGMINIMAL(CAM_ISP, "IRQ status_0 = 0x%x", th_payload->evt_status_arr[0]);
+	CAM_QCLOGMINIMAL(CAM_ISP, "IRQ status_1 = 0x%x", th_payload->evt_status_arr[1]);
+	CAM_QCLOGMINIMAL(CAM_ISP, "IRQ status_2 = 0x%x", th_payload->evt_status_arr[2]);
 
 	rc  = cam_vfe_bus_get_evt_payload(rsrc_data->common_data, &evt_payload);
 	if (rc) {
@@ -2714,7 +2679,6 @@ static int cam_vfe_bus_error_irq_top_half(uint32_t evt_id,
 	evt_payload->debug_status_0 = cam_io_r_mb(
 		bus_priv->common_data.mem_base +
 		bus_priv->common_data.common_reg->debug_status_0);
-	evt_payload->enable_dump = bus_priv->common_data.enable_dmi_dump;
 
 	th_payload->evt_payload_priv = evt_payload;
 
@@ -3092,7 +3056,7 @@ static int cam_vfe_bus_update_wm(void *priv, void *cmd_args,
 		val = ALIGNUP(val, 16);
 		if (val != io_cfg->planes[i].plane_stride &&
 			val != wm_data->stride)
-			CAM_WARN(CAM_ISP,
+			CAM_DBG(CAM_ISP,
 				"Warning stride %u expected %u",
 				io_cfg->planes[i].plane_stride,
 				val);
@@ -3644,9 +3608,9 @@ int cam_vfe_bus_ver2_init(
 	bus_priv->common_data.reg_data           = &ver2_hw_info->reg_data;
 	bus_priv->common_data.addr_no_sync       =
 		CAM_VFE_BUS_ADDR_NO_SYNC_DEFAULT_VAL;
+	bus_priv->common_data.stats_data         = ver2_hw_info->stats_data;
 	bus_priv->common_data.camera_hw_version = camera_hw_version;
 	bus_priv->common_data.stats_data         = ver2_hw_info->stats_data;
-
 	mutex_init(&bus_priv->common_data.bus_mutex);
 
 	rc = cam_irq_controller_init(drv_name, bus_priv->common_data.mem_base,

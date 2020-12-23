@@ -353,6 +353,7 @@ static struct cam_vfe_bus_ver2_stats_cfg_info stats_175_130_info  = {
 	},
 };
 
+
 static struct cam_vfe_top_ver2_reg_offset_common vfe175_130_top_common_reg = {
 	.hw_version               = 0x00000000,
 	.hw_capability            = 0x00000004,
@@ -423,31 +424,6 @@ static struct cam_vfe_top_ver2_hw_info vfe175_130_top_hw_info = {
 		.fe_reg     = &vfe175_130_fe_reg,
 		.reg_data       = &vfe_175_130_fe_reg_data,
 		},
-	.dump_data = {
-		.num_reg_dump_entries  =  2,
-		.num_lut_dump_entries  =  1,
-		.dmi_cfg               =  0xc24,
-		.dmi_addr              =  0xc28,
-		.dmi_data_path_hi      =  0xc2C,
-		.dmi_data_path_lo      =  0xc30,
-		.reg_entry = {
-			{
-				.reg_dump_start = 0x0,
-				.reg_dump_end   = 0x1160,
-			},
-			{
-				.reg_dump_start = 0x2000,
-				.reg_dump_end   = 0x3978,
-			},
-		},
-		.lut_entry = {
-			{
-				.lut_word_size = 64,
-				.lut_bank_sel  = 0x40,
-				.lut_addr_size = 180,
-			},
-		},
-	},
 	.mux_type = {
 		CAM_VFE_CAMIF_VER_2_0,
 		CAM_VFE_RDI_VER_1_0,
@@ -605,8 +581,6 @@ static struct cam_vfe_bus_ver2_hw_info vfe175_130_bus_hw_info = {
 		.addr_sync_cfg                = 0x0000207C,
 		.addr_sync_frame_hdr          = 0x00002080,
 		.addr_sync_no_sync            = 0x00002084,
-		.debug_status_cfg             = 0x0000226C,
-		.debug_status_0               = 0x00002270,
 	},
 	.num_client = 24,
 	.bus_client_reg = {

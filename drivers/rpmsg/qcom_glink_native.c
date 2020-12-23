@@ -2152,5 +2152,18 @@ void qcom_glink_native_unregister(struct qcom_glink *glink)
 }
 EXPORT_SYMBOL_GPL(qcom_glink_native_unregister);
 
+const char *glink_intr_owner(int irq)
+{
+	struct irq_desc *desc = irq_to_desc(irq);
+	struct qcom_glink *glink;
+	
+	if (desc && desc->action) {
+		glink = desc->action->dev_id;
+		return glink?glink->name:NULL;
+	}
+
+	return NULL;
+}
+
 MODULE_DESCRIPTION("Qualcomm GLINK driver");
 MODULE_LICENSE("GPL v2");

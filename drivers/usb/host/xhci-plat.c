@@ -347,6 +347,7 @@ static int xhci_plat_probe(struct platform_device *pdev)
 	if (device_property_read_u32(&pdev->dev, "usb-core-id", &xhci->core_id))
 		xhci->core_id = -EINVAL;
 
+#if !defined(CONFIG_USB_DWC3_MSM)
 	hcd->usb_phy = devm_usb_get_phy_by_phandle(sysdev, "usb-phy", 0);
 	if (IS_ERR(hcd->usb_phy)) {
 		ret = PTR_ERR(hcd->usb_phy);
@@ -358,6 +359,9 @@ static int xhci_plat_probe(struct platform_device *pdev)
 		if (ret)
 			goto put_usb3_hcd;
 	}
+#else
+	hcd->usb_phy = NULL;
+#endif
 
 	hcd->usb3_phy = devm_usb_get_phy_by_phandle(pdev->dev.parent, "usb-phy",
 			1);
@@ -431,6 +435,18 @@ static int xhci_plat_remove(struct platform_device *dev)
 	struct usb_hcd *shared_hcd = xhci->shared_hcd;
 
 	pm_runtime_get_sync(&dev->dev);
+#if defined(CONFIG_USB_HOST_SAMSUNG_FEATURE)
+		/* In order to prevent kernel panic */
+		if (!pm_runtime_suspended(&xhci->shared_hcd->self.root_hub->dev)) {
+			pr_info("%s, shared_hcd pm_runtime_forbid\n", __func__);
+			pm_runtime_forbid(&xhci->shared_hcd->self.root_hub->dev);
+		}
+		if (!pm_runtime_suspended(&xhci->main_hcd->self.root_hub->dev)) {
+			pr_info("%s, main_hcd pm_runtime_forbid\n", __func__);
+			pm_runtime_forbid(&xhci->main_hcd->self.root_hub->dev);
+		}
+#endif
+
 	xhci->xhc_state |= XHCI_STATE_REMOVING;
 
 	device_remove_file(&dev->dev, &dev_attr_config_imod);

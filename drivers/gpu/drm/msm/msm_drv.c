@@ -60,6 +60,28 @@
 #define MSM_VERSION_MINOR	2
 #define MSM_VERSION_PATCHLEVEL	0
 
+static BLOCKING_NOTIFIER_HEAD(msm_drm_notifier_list);
+
+int msm_drm_register_notifier_client(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_register(&msm_drm_notifier_list, nb);
+}
+EXPORT_SYMBOL(msm_drm_register_notifier_client);
+
+int msm_drm_unregister_notifier_client(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_unregister(&msm_drm_notifier_list, nb);
+}
+EXPORT_SYMBOL(msm_drm_unregister_notifier_client);
+
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+int __msm_drm_notifier_call_chain(unsigned long event, void *data)
+{
+	return blocking_notifier_call_chain(&msm_drm_notifier_list,
+					event, data);
+}
+#endif
+
 static void msm_fb_output_poll_changed(struct drm_device *dev)
 {
 	struct msm_drm_private *priv = NULL;
@@ -503,6 +525,8 @@ static int msm_drm_init(struct device *dev, struct drm_driver *drv)
 	int ret, i;
 	struct sched_param param;
 
+	pr_err("%s ++ \n", __func__);
+
 	ddev = drm_dev_alloc(drv, dev);
 	if (!ddev) {
 		dev_err(dev, "failed to allocate drm_device\n");
@@ -769,6 +793,8 @@ static int msm_drm_init(struct device *dev, struct drm_driver *drv)
 	drm_kms_helper_poll_init(ddev);
 	place_marker("M - DISPLAY Driver Ready");
 
+	pr_err("%s -- \n", __func__);
+
 	return 0;
 
 fail:
@@ -786,6 +812,9 @@ mdss_init_fail:
 	kfree(priv);
 priv_alloc_fail:
 	drm_dev_unref(ddev);
+
+	pr_err("%s error -- \n", __func__);
+
 	return ret;
 }
 
@@ -1912,6 +1941,12 @@ static int add_display_components(struct device *dev,
 			node = of_parse_phandle(np, "connectors", i);
 			if (!node)
 				break;
+#ifndef CONFIG_SEC_DISPLAYPORT
+			if (!strncmp(node->name, "qcom,dp_display", 15)) {
+				pr_info("[drm-dp] disabled displayport!\n");
+				continue;
+			}
+#endif
 
 			component_match_add(dev, matchptr, compare_of, node);
 		}
@@ -2007,6 +2042,7 @@ int msm_get_mixer_count(struct msm_drm_private *priv,
 	return funcs->get_mixer_count(priv->kms, mode,
 			max_mixer_width, num_lm);
 }
+
 /*
  * We don't know what's the best binding to link the gpu with the drm device.
  * Fow now, we just hunt for all the possible gpus that we support, and add them

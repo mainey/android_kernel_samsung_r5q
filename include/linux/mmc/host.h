@@ -16,6 +16,7 @@
 #include <linux/fault-inject.h>
 #include <linux/blkdev.h>
 #include <linux/extcon.h>
+#include <linux/wakelock.h>
 
 #include <linux/mmc/core.h>
 #include <linux/mmc/card.h>
@@ -515,6 +516,7 @@ struct mmc_host {
 #define MMC_CAP2_HS200_1_2V_SDR (1 << 6)        /* can support */
 #define MMC_CAP2_HS200		(MMC_CAP2_HS200_1_8V_SDR | \
 				MMC_CAP2_HS200_1_2V_SDR)
+#define MMC_CAP2_DETECT_ON_ERR  (1 << 8)        /* On I/O err check card removal */
 #define MMC_CAP2_HC_ERASE_SZ    (1 << 9)        /* High-capacity erase size */
 #define MMC_CAP2_CD_ACTIVE_HIGH (1 << 10)       /* Card-detect signal active high */
 #define MMC_CAP2_RO_ACTIVE_HIGH (1 << 11)       /* Write-protect signal active high */
@@ -603,6 +605,8 @@ struct mmc_host {
 	int			claim_cnt;	/* "claim" nesting count */
 
 	struct delayed_work	detect;
+	struct wake_lock        detect_wake_lock;
+	const char              *wlock_name;
 	int			detect_change;	/* card detect flag */
 	struct mmc_slot		slot;
 
@@ -729,6 +733,8 @@ struct mmc_host {
 	atomic_t rpmb_req_pending;
 	struct mutex		rpmb_req_mutex;
 	bool crash_on_err;	/* crash the system on error */
+	unsigned int		card_detect_cnt;
+	int (*sdcard_uevent)(struct mmc_card *card);
 	unsigned long		private[0] ____cacheline_aligned;
 };
 

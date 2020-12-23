@@ -7390,6 +7390,11 @@ static int start_cpu(struct task_struct *p, bool boosted,
 		return rd->max_cap_orig_cpu;
 	}
 
+	if (schedtune_prefer_prime(p))
+		return rd->max_cap_orig_cpu;
+	else if(task_placement_boost_enabled(p))
+		return rd->mid_cap_orig_cpu;
+
 	/* A task always fits on its rtg_target */
 	if (rtg_target) {
 		int rtg_target_cpu = cpumask_first_and(rtg_target,
@@ -9331,8 +9336,7 @@ redo:
 
 		if (sched_feat(LB_MIN) && load < 16 && !env->sd->nr_balance_failed)
 			goto next;
-
-		/*
+	/*
 		 * p is not running task when we goes until here, so if p is one
 		 * of the 2 task in src cpu rq and not the running one,
 		 * that means it is the only task that can be balanced.
@@ -9342,7 +9346,7 @@ redo:
 		 */
 		if (((cpu_rq(env->src_cpu)->nr_running > 2) ||
 			(env->flags & LBF_IGNORE_BIG_TASKS)) &&
-			((load / 2) > env->imbalance))
+			(load / 2) > env->imbalance)
 			goto next;
 
 		detach_task(p, env);

@@ -90,7 +90,8 @@ static bool __is_cp_guaranteed(struct page *page)
 			inode->i_ino ==  F2FS_NODE_INO(sbi) ||
 			S_ISDIR(inode->i_mode) ||
 			(S_ISREG(inode->i_mode) &&
-			(f2fs_is_atomic_file(inode) || IS_NOQUOTA(inode))) ||
+			(f2fs_is_atomic_file(inode) || IS_NOQUOTA(inode) ||
+			IS_ATOMIC_WRITTEN_PAGE(page))) ||
 			is_cold_data(page))
 		return true;
 	return false;
@@ -379,11 +380,13 @@ static void f2fs_write_end_io(struct bio *bio)
 
 		if (unlikely(bio->bi_status)) {
 			mapping_set_error(page->mapping, -EIO);
-			if (type == F2FS_WB_CP_DATA)
+			if (type == F2FS_WB_CP_DATA) {
 				f2fs_stop_checkpoint(sbi, true);
+				f2fs_bug_on_endio(sbi, 1);
+			}
 		}
 
-		f2fs_bug_on(sbi, page->mapping == NODE_MAPPING(sbi) &&
+		f2fs_bug_on_endio(sbi, page->mapping == NODE_MAPPING(sbi) &&
 					page->index != nid_of_node(page));
 
 		dec_page_count(sbi, type);
@@ -2678,6 +2681,14 @@ got_it:
 		err = -EFSCORRUPTED;
 		goto out_writepage;
 	}
+
+	if (file_is_hot(inode))
+		F2FS_I_SB(inode)->sec_stat.hot_file_written_blocks++;
+	else if (file_is_cold(inode))
+		F2FS_I_SB(inode)->sec_stat.cold_file_written_blocks++;
+	else
+		F2FS_I_SB(inode)->sec_stat.warm_file_written_blocks++;
+
 	/*
 	 * If current allocation needs SSR,
 	 * it had better in-place writes for updated data.
@@ -2780,6 +2791,8 @@ int f2fs_write_single_data_page(struct page *page, int *submitted,
 	};
 
 	trace_f2fs_writepage(page, DATA);
+
+	f2fs_cond_set_fua(&fio);
 
 	/* we should bypass data pages to proceed the kworkder jobs */
 	if (unlikely(f2fs_cp_error(sbi))) {
@@ -3262,6 +3275,12 @@ static int f2fs_write_data_pages(struct address_space *mapping,
 			    struct writeback_control *wbc)
 {
 	struct inode *inode = mapping->host;
+
+	/* W/A - prevent panic while shutdown */
+	if (unlikely(ignore_fs_panic)) {
+		//pr_err("%s: Ignore panic\n", __func__);
+		return -EIO;
+	}
 
 	return __f2fs_write_data_pages(mapping, wbc,
 			F2FS_I(inode)->cp_task == current ?
