@@ -1012,7 +1012,7 @@ struct kgsl_process_private *kgsl_process_private_find(pid_t pid)
 	return private;
 }
 
-#if defined(CONFIG_DISPLAY_SAMSUNG)
+#if defined(CONFIG_DISPLAY_SAMSUNG) || defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
 #define KGSL_PRCO_PATH "/sys/kernel/debug/kgsl/proc"
 #define KGSL_PROC_PID_MEM_PATH "mem"
 
@@ -2402,14 +2402,6 @@ long kgsl_ioctl_cmdstream_freememontimestamp_ctxtid(
 	return ret;
 }
 
-static inline int _check_region(unsigned long start, unsigned long size,
-				uint64_t len)
-{
-	uint64_t end = ((uint64_t) start) + size;
-
-	return (end > len);
-}
-
 static int check_vma_flags(struct vm_area_struct *vma,
 		unsigned int flags)
 {
@@ -2424,23 +2416,27 @@ static int check_vma_flags(struct vm_area_struct *vma,
 	return -EFAULT;
 }
 
-static int check_vma(struct vm_area_struct *vma, struct file *vmfile,
-		struct kgsl_memdesc *memdesc)
+static int check_vma(unsigned long hostptr, u64 size)
 {
-	if (vma == NULL || vma->vm_file != vmfile)
-		return -EINVAL;
+	struct vm_area_struct *vma;
+	unsigned long cur = hostptr;
 
-	/* userspace may not know the size, in which case use the whole vma */
-	if (memdesc->size == 0)
-		memdesc->size = vma->vm_end - vma->vm_start;
-	/* range checking */
-	if (vma->vm_start != memdesc->useraddr ||
-		(memdesc->useraddr + memdesc->size) != vma->vm_end)
-		return -EINVAL;
-	return check_vma_flags(vma, memdesc->flags);
+	while (cur < (hostptr + size)) {
+		vma = find_vma(current->mm, cur);
+		if (!vma)
+			return false;
+
+		/* Don't remap memory that we already own */
+		if (vma->vm_file && vma->vm_file->f_op == &kgsl_fops)
+			return false;
+
+		cur = vma->vm_end;
+	}
+
+	return true;
 }
 
-static int memdesc_sg_virt(struct kgsl_memdesc *memdesc, struct file *vmfile)
+static int memdesc_sg_virt(struct kgsl_memdesc *memdesc)
 {
 	int ret = 0;
 	long npages = 0, i;
@@ -2463,18 +2459,17 @@ static int memdesc_sg_virt(struct kgsl_memdesc *memdesc, struct file *vmfile)
 	}
 
 	down_read(&current->mm->mmap_sem);
-	/* If we have vmfile, make sure we map the correct vma and map it all */
-	if (vmfile != NULL)
-		ret = check_vma(find_vma(current->mm, memdesc->useraddr),
-				vmfile, memdesc);
-
-	if (ret == 0) {
-		npages = get_user_pages(memdesc->useraddr,
-					sglen, write, pages, NULL);
-		ret = (npages < 0) ? (int)npages : 0;
+	if (!check_vma(memdesc->useraddr, memdesc->size)) {
+		up_read(&current->mm->mmap_sem);
+		ret = -EFAULT;
+		goto out;
 	}
+
+	npages = get_user_pages(memdesc->useraddr,
+				sglen, write, pages, NULL);
 	up_read(&current->mm->mmap_sem);
 
+	ret = (npages < 0) ? (int)npages : 0;
 	if (ret)
 		goto out;
 
@@ -2525,7 +2520,7 @@ static int kgsl_setup_anon_useraddr(struct kgsl_pagetable *pagetable,
 		entry->memdesc.gpuaddr = (uint64_t)  entry->memdesc.useraddr;
 	}
 
-	return memdesc_sg_virt(&entry->memdesc, NULL);
+	return memdesc_sg_virt(&entry->memdesc);
 }
 
 #ifdef CONFIG_DMA_SHARED_BUFFER
@@ -3534,7 +3529,7 @@ long kgsl_ioctl_gpuobj_alloc(struct kgsl_device_private *dev_priv,
 {
 	struct kgsl_gpuobj_alloc *param = data;
 	struct kgsl_mem_entry *entry;
-#if defined(CONFIG_DISPLAY_SAMSUNG)
+#if defined(CONFIG_DISPLAY_SAMSUNG) || defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
 	struct kgsl_process_private *private = dev_priv->process_priv;
 	uint64_t debug_size;
 	debug_size = param->size >> 10;
@@ -4833,7 +4828,7 @@ kgsl_get_unmapped_area(struct file *file, unsigned long addr,
 				private->pid, current->mm->mmap_base, addr,
 				pgoff, len, (int) val);
 
-#if defined(CONFIG_DISPLAY_SAMSUNG)
+#if defined(CONFIG_DISPLAY_SAMSUNG) || defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
 		if (IS_ERR_VALUE(val))
 			kgsl_svm_addr_mapping_log(private->pid);
 #endif
@@ -4905,7 +4900,7 @@ static int kgsl_mmap(struct file *file, struct vm_area_struct *vma)
 		for (i = 0; i < m->page_count; i++) {
 			struct page *page = m->pages[i];
 
-#if defined(CONFIG_DISPLAY_SAMSUNG)
+#if defined(CONFIG_DISPLAY_SAMSUNG) || defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
 			ret = vm_insert_page(vma, addr, page);
 			if (ret)
 				panic("kgsl vmap fail");
@@ -5166,16 +5161,16 @@ int kgsl_device_platform_probe(struct kgsl_device *device)
 	 * which IRQ's affinity is set to.
 	 */
 #ifdef CONFIG_SMP
-#ifndef CONFIG_DISPLAY_SAMSUNG
-	device->pwrctrl.pm_qos_req_dma.type = PM_QOS_REQ_AFFINE_IRQ;
-	device->pwrctrl.pm_qos_req_dma.irq = device->pwrctrl.interrupt_num;
-#else
+#if defined(CONFIG_DISPLAY_SAMSUNG) || defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
 	device->pwrctrl.pm_qos_req_dma.type = PM_QOS_REQ_AFFINE_CORES;
 	cpumask_empty(&device->pwrctrl.pm_qos_req_dma.cpus_affine);
 	for_each_possible_cpu(cpu) {
 		if ((1 << cpu) & 0xf)
 			cpumask_set_cpu(cpu, &device->pwrctrl.pm_qos_req_dma.cpus_affine);
 	}
+#else
+	device->pwrctrl.pm_qos_req_dma.type = PM_QOS_REQ_AFFINE_IRQ;
+	device->pwrctrl.pm_qos_req_dma.irq = device->pwrctrl.interrupt_num;
 #endif
 #endif
 	pm_qos_add_request(&device->pwrctrl.pm_qos_req_dma,

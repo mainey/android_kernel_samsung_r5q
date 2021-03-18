@@ -549,7 +549,7 @@ static void __cam_isp_ctx_send_sof_boot_timestamp(
 	req_msg.u.frame_msg.link_hdl = ctx_isp->base->link_hdl;
 	req_msg.u.frame_msg.sof_status = sof_event_status;
 
-	CAM_INFO(CAM_ISP,
+	CAM_QCLOGMINIMAL(CAM_ISP,
 		"request id:%lld frame number:%lld boot time stamp:0x%llx ctx %d",
 		request_id, ctx_isp->frame_id,
 		ctx_isp->boot_timestamp, ctx->ctx_id);
@@ -577,7 +577,7 @@ static void __cam_isp_ctx_send_sof_timestamp(
 	req_msg.u.frame_msg.link_hdl = ctx_isp->base->link_hdl;
 	req_msg.u.frame_msg.sof_status = sof_event_status;
 
-	CAM_INFO(CAM_ISP,
+	CAM_DBG(CAM_ISP,
 		"request id:%lld frame number:%lld SOF time stamp:0x%llx ctx %d sof_status: %d",
 		request_id, ctx_isp->frame_id,
 		ctx_isp->sof_timestamp_val, ctx->ctx_id, sof_event_status);

@@ -215,7 +215,7 @@ void cam_mipi_get_clock_string(struct cam_sensor_ctrl_t *s_ctrl)
 
 #if defined(CONFIG_SEC_A90Q_PROJECT)
 	if (s_ctrl->sensordata->slave_info.sensor_id == SENSOR_ID_IMX316
-		&& (s_ctrl->soc_info.index == 7 /*Front TOF*/ || s_ctrl->soc_info.index == 8)) {
+		&& (s_ctrl->soc_info.index == 7 /*Front TOF*/ || s_ctrl->soc_info.index == 6)) {
 		if (strcmp(mipi_string, "80_20 Mhz") == 0) {
 			scnprintf(tof_freq, sizeof(tof_freq), "80");
 		} else if (strcmp(mipi_string, "83_20 Mhz") == 0) {

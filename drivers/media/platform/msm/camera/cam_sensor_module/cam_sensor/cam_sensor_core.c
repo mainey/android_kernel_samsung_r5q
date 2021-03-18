@@ -303,7 +303,7 @@ int32_t cam_check_stream_on(
 	if (i2c_list->i2c_settings.reg_setting[0].reg_addr == STREAM_ON_ADDR_IMX316
 		&& i2c_list->i2c_settings.reg_setting[0].reg_data != 0x0
 		&& s_ctrl->sensordata->slave_info.sensor_id == SENSOR_ID_IMX316
-		&& (s_ctrl->soc_info.index == 7 /*Front TOF*/ || s_ctrl->soc_info.index == 8 /*Rear TOF*/)) {
+		&& (s_ctrl->soc_info.index == 7 /*Front TOF*/ || s_ctrl->soc_info.index == 6 /*Rear TOF*/)) {
 		ret = 1;
 	}
 #endif
@@ -881,7 +881,7 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 #if defined(CONFIG_SEC_A90Q_PROJECT)
 		if (
 			(s_ctrl->sensordata->slave_info.sensor_id == SENSOR_ID_IMX316
-			&& (s_ctrl->soc_info.index == 7 /*Front TOF*/ || s_ctrl->soc_info.index == 8))
+			&& (s_ctrl->soc_info.index == 7 /*Front TOF*/ || s_ctrl->soc_info.index == 6))
 			) {
 			cam_mipi_init_setting(s_ctrl);
 		}
@@ -1198,7 +1198,7 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 #if defined(CONFIG_SEC_A90Q_PROJECT)
 		if (
 			(s_ctrl->sensordata->slave_info.sensor_id == SENSOR_ID_IMX316
-			&& (s_ctrl->soc_info.index == 7 /*Front TOF*/|| s_ctrl->soc_info.index == 8))
+			&& (s_ctrl->soc_info.index == 7 /*Front TOF*/|| s_ctrl->soc_info.index == 6))
 			) {
 			cam_mipi_update_info(s_ctrl);
 			cam_mipi_get_clock_string(s_ctrl);
@@ -1244,7 +1244,7 @@ int32_t cam_sensor_driver_cmd(struct cam_sensor_ctrl_t *s_ctrl,
 
 #if defined(CONFIG_SEC_A90Q_PROJECT)
 		if (s_ctrl->sensordata->slave_info.sensor_id == SENSOR_ID_IMX316
-			&& (s_ctrl->soc_info.index == 7 /*Front TOF*/ || s_ctrl->soc_info.index == 8)) {
+			&& (s_ctrl->soc_info.index == 7 /*Front TOF*/ || s_ctrl->soc_info.index == 6)) {
 			scnprintf(tof_freq, sizeof(tof_freq), "0");
 			CAM_INFO(CAM_SENSOR, "[TOF_FREQ_DBG] tof_freq : %s", tof_freq);
 		}

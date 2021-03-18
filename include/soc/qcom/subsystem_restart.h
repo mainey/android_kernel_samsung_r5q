@@ -171,6 +171,7 @@ extern int subsystem_crash(const char *name);
 extern void subsys_force_stop(const char *name, bool val);
 extern int subsystem_crashed(const char *name);
 extern void subsys_set_modem_silent_ssr(bool value, int id);
+extern void subsys_set_adsp_silent_ssr(bool value);
 
 extern void *subsystem_get(const char *name);
 extern void *subsystem_get_with_fwname(const char *name, const char *fw_name);

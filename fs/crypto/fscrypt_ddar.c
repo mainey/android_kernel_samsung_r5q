@@ -318,31 +318,6 @@ int fscrypt_dd_may_submit_bio(struct bio *bio)
 	return fscrypt_dd_submit_bio(inode, bio);
 }
 
-int fscrypt_dd_skip_hardware_decryption(struct inode *inode)
-{
-	struct fscrypt_info *ci = NULL;
-
-	if (!inode)
-		return 0;
-
-	ci = inode->i_crypt_info;
-	if (!S_ISREG(inode->i_mode))
-		return 0;
-
-	// SDP - START BLOCK
-	//	-->TODO : no member named 'ci_data_mode' in 'struct fscrypt_info'
-	//	use of undeclared identifier 'FS_ENCRYPTION_MODE_PRIVATE' -> 'FSCRYPT_MODE_PRIVATE'
-
-	//if (ci && ci->ci_data_mode == FSCRYPT_MODE_PRIVATE) {
-	//	dd_info("skip hardware decryption for ino(%ld)\n", inode->i_ino);
-	//	ci->ci_data_mode = 0;
-	//	return 1;
-	//}
-	// SDP - END BLOCK
-
-	return 0;
-}
-
 long fscrypt_dd_get_ino(struct bio *bio)
 {
 	struct inode *inode = fscrypt_bio_get_inode(bio);

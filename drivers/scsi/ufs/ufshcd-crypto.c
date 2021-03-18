@@ -379,7 +379,6 @@ int ufshcd_prepare_lrbp_crypto_spec(struct ufs_hba *hba,
 				    struct ufshcd_lrb *lrbp)
 {
 	struct bio_crypt_ctx *bc;
-	u64 dun;  
 
 	if (!bio_crypt_should_process(cmd->request)) {
 		lrbp->crypto_enable = false;
@@ -401,9 +400,8 @@ int ufshcd_prepare_lrbp_crypto_spec(struct ufs_hba *hba,
 	lrbp->crypto_key_slot = bc->bc_keyslot;
 
 	if(bc->is_ext4) {
-		dun = (u64)cmd->request->bio->bi_iter.bi_sector;
-		dun >>= 3; 
-		lrbp->data_unit_num = dun;
+		lrbp->data_unit_num = (u64)cmd->request->bio->bi_iter.bi_sector;
+		lrbp->data_unit_num >>= 3; 
 	} else {
 		lrbp->data_unit_num = bc->bc_dun[0];
 	}

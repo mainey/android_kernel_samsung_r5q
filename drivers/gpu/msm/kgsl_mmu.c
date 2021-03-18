@@ -24,7 +24,7 @@
 #include "kgsl_device.h"
 #include "kgsl_sharedmem.h"
 
-#if defined(CONFIG_DISPLAY_SAMSUNG)
+#if defined(CONFIG_DISPLAY_SAMSUNG) || defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
 #include <linux/delay.h>
 #endif
 
@@ -398,7 +398,7 @@ kgsl_mmu_map(struct kgsl_pagetable *pagetable,
 				struct kgsl_memdesc *memdesc)
 {
 	int size;
-#if defined(CONFIG_DISPLAY_SAMSUNG)
+#if defined(CONFIG_DISPLAY_SAMSUNG) || defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
 	int retry_cnt;
 #endif
 
@@ -419,7 +419,7 @@ kgsl_mmu_map(struct kgsl_pagetable *pagetable,
 
 		ret = pagetable->pt_ops->mmu_map(pagetable, memdesc);
 
-#if defined(CONFIG_DISPLAY_SAMSUNG)
+#if defined(CONFIG_DISPLAY_SAMSUNG) || defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
 		if (ret != 0 && !in_interrupt()) {
 			for (retry_cnt = 0; retry_cnt < 62 ; retry_cnt++) {
 				/* To wait free page by memory reclaim*/

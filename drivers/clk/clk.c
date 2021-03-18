@@ -40,40 +40,6 @@
 	.ib = _ib,				\
 }
 
-static struct msm_bus_vectors clk_debugfs_vectors[] = {
-	MSM_BUS_VECTOR(MSM_BUS_MASTER_AMPSS_M0,
-			MSM_BUS_SLAVE_CAMERA_CFG, 0, 0),
-	MSM_BUS_VECTOR(MSM_BUS_MASTER_AMPSS_M0,
-			MSM_BUS_SLAVE_VENUS_CFG, 0, 0),
-	MSM_BUS_VECTOR(MSM_BUS_MASTER_AMPSS_M0,
-			MSM_BUS_SLAVE_DISPLAY_CFG, 0, 0),
-	MSM_BUS_VECTOR(MSM_BUS_MASTER_AMPSS_M0,
-			MSM_BUS_SLAVE_CAMERA_CFG, 0, 1),
-	MSM_BUS_VECTOR(MSM_BUS_MASTER_AMPSS_M0,
-			MSM_BUS_SLAVE_VENUS_CFG, 0, 1),
-	MSM_BUS_VECTOR(MSM_BUS_MASTER_AMPSS_M0,
-			MSM_BUS_SLAVE_DISPLAY_CFG, 0, 1),
-};
-
-static struct msm_bus_paths clk_debugfs_usecases[] = {
-	{
-		.num_paths = 3,
-		.vectors = &clk_debugfs_vectors[0],
-	},
-	{
-		.num_paths = 3,
-		.vectors = &clk_debugfs_vectors[3],
-	}
-};
-
-static struct msm_bus_scale_pdata clk_debugfs_scale_table = {
-	.usecase = clk_debugfs_usecases,
-	.num_usecases = ARRAY_SIZE(clk_debugfs_usecases),
-	.name = "clk_debugfs",
-};
-
-static uint32_t clk_debugfs_bus_cl_id;
-
 #if defined(CONFIG_COMMON_CLK)
 
 static DEFINE_SPINLOCK(enable_lock);
@@ -2738,6 +2704,8 @@ static u32 debug_suspend = 1;
 static DEFINE_MUTEX(clk_debug_lock);
 static HLIST_HEAD(clk_debug_list);
 
+static uint32_t clk_debugfs_bus_cl_id;
+
 static struct hlist_head *all_lists[] = {
 	&clk_root_list,
 	&clk_orphan_list,
@@ -3526,6 +3494,38 @@ void clock_debug_print_enabled(bool print_parent)
 		clock_debug_print_enabled_debug_suspend(NULL);
 }
 EXPORT_SYMBOL_GPL(clock_debug_print_enabled);
+
+static struct msm_bus_vectors clk_debugfs_vectors[] = {
+	MSM_BUS_VECTOR(MSM_BUS_MASTER_AMPSS_M0,
+			MSM_BUS_SLAVE_CAMERA_CFG, 0, 0),
+	MSM_BUS_VECTOR(MSM_BUS_MASTER_AMPSS_M0,
+			MSM_BUS_SLAVE_VENUS_CFG, 0, 0),
+	MSM_BUS_VECTOR(MSM_BUS_MASTER_AMPSS_M0,
+			MSM_BUS_SLAVE_DISPLAY_CFG, 0, 0),
+	MSM_BUS_VECTOR(MSM_BUS_MASTER_AMPSS_M0,
+			MSM_BUS_SLAVE_CAMERA_CFG, 0, 1),
+	MSM_BUS_VECTOR(MSM_BUS_MASTER_AMPSS_M0,
+			MSM_BUS_SLAVE_VENUS_CFG, 0, 1),
+	MSM_BUS_VECTOR(MSM_BUS_MASTER_AMPSS_M0,
+			MSM_BUS_SLAVE_DISPLAY_CFG, 0, 1),
+};
+
+static struct msm_bus_paths clk_debugfs_usecases[] = {
+	{
+		.num_paths = 3,
+		.vectors = &clk_debugfs_vectors[0],
+	},
+	{
+		.num_paths = 3,
+		.vectors = &clk_debugfs_vectors[3],
+	}
+};
+
+static struct msm_bus_scale_pdata clk_debugfs_scale_table = {
+	.usecase = clk_debugfs_usecases,
+	.num_usecases = ARRAY_SIZE(clk_debugfs_usecases),
+	.name = "clk_debugfs",
+};
 
 /**
  * clk_debug_init - lazily populate the debugfs clk directory

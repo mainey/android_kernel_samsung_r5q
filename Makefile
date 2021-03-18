@@ -1043,14 +1043,14 @@ USE_SECGETSPF := $(shell echo $(PATH))
 ifneq ($(findstring buildscript/build_common/core/bin, $(USE_SECGETSPF)),)
   ifneq ($(shell secgetspf SEC_PRODUCT_FEATURE_BIOAUTH_CONFIG_FINGERPRINT_TZ), false)
     ifeq ($(CONFIG_SENSORS_FINGERPRINT), y)
-      ifneq ($(SEC_FACTORY_BUILD), true)
+      ifneq ($(CONFIG_SEC_FACTORY), y)
         export KBUILD_FP_SENSOR_CFLAGS := -DENABLE_SENSORS_FPRINT_SECURE
       endif
     endif
   endif
 else
   ifeq ($(CONFIG_SENSORS_FINGERPRINT), y)
-    ifneq ($(SEC_FACTORY_BUILD), true)
+    ifneq ($(CONFIG_SEC_FACTORY), y)
       export KBUILD_FP_SENSOR_CFLAGS := -DENABLE_SENSORS_FPRINT_SECURE
     endif
   endif

@@ -98,7 +98,7 @@ out:
 		if (!enable)
 			usleep_range(10 * 1000, 11 * 1000);
 		else
-			msleep(90);
+			msleep(105);
 	}
 
 	first_flag = false;

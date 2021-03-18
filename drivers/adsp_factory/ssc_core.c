@@ -946,6 +946,8 @@ static ssize_t lcd_onoff_store(struct device *dev,
 	mutex_lock(&data->light_factory_mutex);
 	adsp_unicast(msg_buf, sizeof(msg_buf),
 		light_idx, 0, MSG_TYPE_OPTION_DEFINE);
+	adsp_unicast(msg_buf, sizeof(msg_buf),
+		MSG_SSC_CORE, 0, MSG_TYPE_OPTION_DEFINE);
 	mutex_unlock(&data->light_factory_mutex);
 #endif
 #ifdef CONFIG_SUPPORT_AK0997X
