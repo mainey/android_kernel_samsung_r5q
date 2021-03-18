@@ -77,7 +77,7 @@
 		qcom,mdss-dsi-panel-hdr-color-primaries = <15635 16450 34000 16000 13250 34500 7500 3000>;
 		qcom,mdss-dsi-panel-peak-brightness = <4000000>;
 		qcom,mdss-dsi-panel-average-brightness = <1200000>;
-		qcom,mdss-dsi-panel-blackness-level = <5>;		
+		qcom,mdss-dsi-panel-blackness-level = <5>;
 
 		/*qcom,mdss-dsi-panel-status-command=*/
 		/*qcom,mdss-dsi-panel-status-command-mode="dsi_lp_mode";*/
@@ -130,6 +130,7 @@
 /*		samsung,support_poc_driver;*/
 /*		samsung,support_gpara;*/
 		samsung,multi_to_one_support;
+		samsung,support_window_color;
 		/*
 		* ************************************************************************************************************************
 		*  Tx
@@ -378,10 +379,10 @@
 			29 01 00 00 00 00 02 F7 02
 			29 01 00 00 00 00 08 F2
 				34 15 2C 60 30 96 2B
-			
+
 			29 01 00 00 00 00 03 F0 A5 A5
 		];
-		
+
 		/*
 		 * ************************************************************************************************************************
 		 * ACL command list and mappings

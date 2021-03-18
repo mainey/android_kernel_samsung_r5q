@@ -75,7 +75,7 @@ int msm_drm_unregister_notifier_client(struct notifier_block *nb)
 }
 EXPORT_SYMBOL(msm_drm_unregister_notifier_client);
 
-#if defined(CONFIG_DISPLAY_SAMSUNG)
+#if defined(CONFIG_DISPLAY_SAMSUNG) || defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
 int __msm_drm_notifier_call_chain(unsigned long event, void *data)
 {
 	return blocking_notifier_call_chain(&msm_drm_notifier_list,
@@ -994,6 +994,11 @@ static void load_gpu(struct drm_device *dev)
 }
 #endif
 
+#if defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+struct msm_file_private *msm_ioctl_power_ctrl_ctx;
+DEFINE_MUTEX(msm_ioctl_power_ctrl_ctx_lock);
+#endif
+
 static int msm_open(struct drm_device *dev, struct drm_file *file)
 {
 	struct msm_file_private *ctx;
@@ -1052,6 +1057,13 @@ static void msm_postclose(struct drm_device *dev, struct drm_file *file)
 				priv->pclient, false);
 	}
 	mutex_unlock(&ctx->power_lock);
+
+#if defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+	mutex_lock(&msm_ioctl_power_ctrl_ctx_lock);
+	if (msm_ioctl_power_ctrl_ctx == ctx)
+		msm_ioctl_power_ctrl_ctx = NULL;
+	mutex_unlock(&msm_ioctl_power_ctrl_ctx_lock);
+#endif
 
 	kfree(ctx);
 }
@@ -1796,6 +1808,12 @@ static int msm_ioctl_power_ctrl(struct drm_device *dev, void *data,
 
 	priv = dev->dev_private;
 
+#if defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+	mutex_lock(&msm_ioctl_power_ctrl_ctx_lock);
+	msm_ioctl_power_ctrl_ctx = ctx;
+	mutex_unlock(&msm_ioctl_power_ctrl_ctx_lock);
+#endif
+
 	mutex_lock(&ctx->power_lock);
 
 	old_cnt = ctx->enable_refcnt;
@@ -1972,9 +1990,15 @@ static int msm_runtime_suspend(struct device *dev)
 	struct msm_drm_private *priv = ddev->dev_private;
 
 	DBG("");
-
+#if defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+	if (priv->mdss)
+		msm_mdss_disable(priv->mdss);
+	else
+		sde_power_resource_enable(&priv->phandle, priv->pclient, false);
+#else
 	if (priv->mdss)
 		return msm_mdss_disable(priv->mdss);
+#endif
 
 	return 0;
 }
@@ -1984,12 +2008,25 @@ static int msm_runtime_resume(struct device *dev)
 	struct drm_device *ddev = dev_get_drvdata(dev);
 	struct msm_drm_private *priv = ddev->dev_private;
 
+#if defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+	int ret;
+
+	DBG("");
+
+	if (priv->mdss)
+		ret = msm_mdss_enable(priv->mdss);
+	else
+		ret = sde_power_resource_enable(&priv->phandle, priv->pclient, true);
+
+	return ret;
+#else
 	DBG("");
 
 	if (priv->mdss)
 		return msm_mdss_enable(priv->mdss);
 
 	return 0;
+#endif
 }
 #endif
 

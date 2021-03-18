@@ -322,21 +322,6 @@ static void fscrypt_generate_dun(const struct fscrypt_info *ci, u64 lblk_num,
 		dun[i] = le64_to_cpu(iv.dun[i]);
 }
 
-static bool is_inode_filesystem_type(const struct inode *inode,
-					const char *fs_type)
-{
-	if (!inode || !fs_type)
-		return false;
-
-	if (!inode->i_sb)
-		return false;
-
-	if (!inode->i_sb->s_type)
-		return false;
-
-	return (strcmp(inode->i_sb->s_type->name, fs_type) == 0);
-}
-
 /**
  * fscrypt_set_bio_crypt_ctx - prepare a file contents bio for inline encryption
  * @bio: a bio which will eventually be submitted to the file
@@ -369,11 +354,12 @@ void fscrypt_set_bio_crypt_ctx(struct bio *bio, const struct inode *inode,
 
 	fscrypt_generate_dun(ci, first_lblk, dun);
 	bio_crypt_set_ctx(bio, &ci->ci_key.blk_key->base, dun, gfp_mask);
-	if (is_inode_filesystem_type(inode, "ext4")) {
-		bio->bi_crypt_context->is_ext4 = true;
-	} else {
-		bio->bi_crypt_context->is_ext4 = false;
-	}
+	if ((fscrypt_policy_contents_mode(&ci->ci_policy) ==
+		FSCRYPT_MODE_PRIVATE) &&
+		(!strcmp(inode->i_sb->s_type->name, "ext4")))
+			bio->bi_crypt_context->is_ext4 = true;
+	else
+			bio->bi_crypt_context->is_ext4 = false;
 }
 EXPORT_SYMBOL_GPL(fscrypt_set_bio_crypt_ctx);
 

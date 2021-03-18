@@ -98,6 +98,7 @@
 		battery,fod_hero_5v_data = <150 (-27) 142 (-37) 150 (-53) 150 (-53) 165 160 156 (-61)>;
 		battery,wc_cover_rpp = <0x44>;
 		battery,oc_fod1 = <1100>;
+		battery,tx_gear_min_op_freq_delay = <4000>;
 		battery,wireless20_vout_list = <9 9 9>; /* WIRELESS_VOUT_11V, 11V, 11V */
 		battery,wireless20_vrect_list = <10 11 11>; /* MFC_AFC_CONF_12V_TX, 12.5V, 12.5V */
 		battery,wireless20_max_power_list = <2 3 3>; /* SEC_WIRELESS_RX_POWER_12W, 15W, 15W */
@@ -439,6 +440,8 @@
 		battery,tx_mfc_iout_phone_5v = <300>;
 		battery,tx_mfc_iout_lcd_on = <900>;
 
+		battery,support_unknown_wpcthm;
+
 		io-channels = <&pm8150l_vadc ADC_GPIO1_PU2>, <&pm8150l_vadc ADC_AMUX_THM3_PU2>, <&pm8150l_vadc ADC_GPIO1_PU2>, <&pm8150l_vadc ADC_AMUX_THM1_PU2>;
 		io-channel-names = "adc-temp", "adc-chg-temp", "adc-wpc-temp", "adc-usb-temp";
 	};
@@ -452,7 +455,7 @@
 		fuelgauge,capacity_max = <1000>;
 		fuelgauge,capacity_max_margin = <300>;
 		fuelgauge,capacity_min = <0>;
-		fuelgauge,capacity_calculation_type = <28>;
+		fuelgauge,capacity_calculation_type = <0x5C>;
 		fuelgauge,repeated_fuelalert;
 		fuelgauge,using_temp_compensation;
 		fuelgauge,low_temp_limit = <100>;
@@ -467,6 +470,13 @@
 		fuelgauge,fg_reset_wa_data = <0x0686 0x3200 0x0191 0x0024 0x1426>; /* fullcapnom(=capacity), dPacc, dQacc,  rcomp0, tempco */
 		fuelgauge,discharge_temp_threshold = <600>;
 		fuelgauge,discharge_volt_threshold = <4200>;
+
+		fuelgauge,lost_soc_trig_soc = <1000>; /* 100.0% */
+		fuelgauge,lost_soc_trig_d_soc = <20>; /* 2% */
+		fuelgauge,lost_soc_trig_scale = <2>; /* 2x */
+		fuelgauge,lost_soc_guarantee_soc = <30>; /* 3.0% */
+		fuelgauge,lost_soc_min_vol = <3200>; /* 3200mV */
+
 		fuelgauge,ttf_capacity = <4300>;
 		fuelgauge,cv_data = <
 			2488	829	1809

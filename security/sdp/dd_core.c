@@ -24,6 +24,7 @@
 
 #include <linux/blkdev.h>
 #include <linux/bio.h>
+#include <linux/bio-crypt-ctx.h>
 
 #include <linux/delay.h>
 #include <linux/kthread.h>
@@ -489,8 +490,9 @@ static void dd_free_pages(struct dd_info *info, struct bio *clone) {
 
 	bio_for_each_segment_all(bv, clone, i) {
 		BUG_ON(!bv->bv_page);
-		if (bv->bv_page->mapping != NULL)
+		if (bv->bv_page->mapping != NULL) {
 			bv->bv_page->mapping = NULL;
+		}
 		mempool_free(bv->bv_page, ctx->page_pool);
 		bv->bv_page = NULL;
 	}
@@ -573,8 +575,9 @@ retry:
 		orig_bvec = &orig->bi_io_vec[clone->bi_vcnt];
 		clone->bi_vcnt++;
 		bvec->bv_page = page;
-		if (i == 0)
+		if (i == 0) {
 			bvec->bv_page->mapping = orig_bvec->bv_page->mapping;
+		}
 		bvec->bv_len = len;
 		bvec->bv_offset = 0;
 
@@ -640,16 +643,16 @@ static void dd_decrypt_work(struct work_struct *work) {
 #ifdef CONFIG_SDP_KEY_DUMP
 	if (!dd_policy_skip_decryption_inner_and_outer(req->info->policy.flags)) {
 #endif
-		if (fscrypt_inode_uses_inline_crypto(req->info->inode)) {
-			dd_verbose("skip oem s/w crypt. hw encryption enabled\n");
-		} else {
-			if (dd_oem_crypto_bio_pages(req, READ, orig)) {
-				dd_error("failed oem crypto\n");
-				goto abort_out;
-			}
-
-			dd_dump_bio_pages("outer (s/w) decryption done", req->u.bio.orig);
+	if (fscrypt_inode_uses_inline_crypto(req->info->inode)) {
+		dd_verbose("skip oem s/w crypt. hw encryption enabled\n");
+	} else {
+		if (dd_oem_crypto_bio_pages(req, READ, orig)) {
+			dd_error("failed oem crypto\n");
+			goto abort_out;
 		}
+
+		dd_dump_bio_pages("outer (s/w) decryption done", req->u.bio.orig);
+	}
 #ifdef CONFIG_SDP_KEY_DUMP
 	} else {
 		dd_info("skip decryption for outer layer - ino : %ld, flag : 0x%04x\n",
@@ -784,14 +787,19 @@ int dd_submit_bio(struct dd_info *info, struct bio *bio) {
 #ifdef CONFIG_SDP_KEY_DUMP
 		if (!dd_policy_skip_decryption_inner_and_outer(req->info->policy.flags)) {
 #endif
-			if (fscrypt_inode_uses_inline_crypto(req->info->inode)) {
-				dd_verbose("skip oem s/w crypt. hw encryption enabled\n");
-//				fscrypt_set_ice_dun(req->info->inode, req->u.bio.clone, 0/* temporary */);
-			}
+		if (fscrypt_inode_uses_inline_crypto(req->info->inode)) {
+			dd_verbose("skip oem s/w crypt. hw encryption enabled\n");
+//			fscrypt_set_ice_dun(req->info->inode, req->u.bio.clone, 0/* temporary */);
+		}
 #ifdef CONFIG_SDP_KEY_DUMP
 		} else {
-			if (!fscrypt_dd_skip_hardware_decryption(req->info->inode))
-				dd_error("failed to skip hardware decryption\n");
+			if (fscrypt_inode_uses_inline_crypto(req->info->inode)) {
+				struct bio_crypt_ctx *bc = req->u.bio.clone->bi_crypt_context;
+				req->u.bio.clone->bi_crypt_context = NULL;
+				dd_info("skip h/w decryption for ino(%ld)\n", req->info->inode->i_ino);
+				if (bc)
+					bio_crypt_free_ctx(req->u.bio.clone);
+			}
 		}
 #endif
 
@@ -1225,7 +1233,9 @@ static dd_transaction_result __process_page_request_locked(
 
 	p = __get_next_user_req(t->control);
 	if(!p) {
+		spin_unlock(&proc->lock);
 		t->control = __get_next_ctr_page(t);
+		spin_lock(&proc->lock);
 		p = __get_next_user_req(t->control);
 	}
 
@@ -1281,8 +1291,10 @@ __acquires(proc->lock)
 			break;
 		}
 
+		spin_unlock(&proc->lock);
 		if(!t->control || __is_ctr_page_full(t->control))
 			t->control = __get_next_ctr_page(t);
+		spin_lock(&proc->lock);
 
 		dd_debug_req("req <processing>", DD_DEBUG_PROCESS, req);
 		dd_verbose("retrieve req [unique:%d] [code:%d] [ino:%ld] [num_pg:%d] [num_md:%d] [num_ctr:%d]\n",
@@ -1957,7 +1969,10 @@ enforce:
 
 		for (i = 0; i < group_info->ngroups; i++) {
 			kgid_t gid = group_info->gid[i];
-			snprintf(msg, 128, "%s %d", msg, gid.val);
+			if (gid.val == AID_VENDOR_DDAR_DE_ACCESS) {
+				snprintf(msg, 128, "%s %d", msg, gid.val);
+				break;
+			}
 		}
 		dd_info("%s\n", msg);
 	}

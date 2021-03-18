@@ -60,6 +60,7 @@ static struct s2mu106_muic_data *static_data;
 static void s2mu106_hv_muic_handle_attach(struct s2mu106_muic_data *muic_data,
 		muic_attached_dev_t new_dev);
 static void _s2mu106_hv_muic_reset(struct s2mu106_muic_data *muic_data);
+static void s2mu106_hv_muic_set_chgtype_usrcmd(struct s2mu106_muic_data *muic_data);
 #if defined(CONFIG_CHARGER_S2MU106)
 static int s2mu106_hv_muic_set_chg_lv_mode(struct s2mu106_muic_data *muic_data,
 		t_afc_vol_change afc_status);
@@ -352,6 +353,7 @@ static void _s2mu106_hv_muic_dcp_charger_attach(struct s2mu106_muic_data *muic_d
 	if (muic_data->afc_check == false || muic_data->pdata->afc_disable == true) {
 		pr_info("%s AFC disable: afc_check(%d), afc_disable(%d)\n",
 				__func__, muic_data->afc_check, muic_data->pdata->afc_disable);
+		s2mu106_hv_muic_set_chgtype_usrcmd(muic_data);
 		return;
 #if IS_ENABLED(CONFIG_MUIC_MANAGER)
 	} else if (muic_if->is_afc_pdic_ready == false) {
@@ -399,6 +401,30 @@ static int s2mu106_hv_muic_set_chg_lv_mode(struct s2mu106_muic_data *muic_data,
 	return ret;
 }
 #endif
+
+static void s2mu106_hv_muic_set_chgtype_usrcmd(struct s2mu106_muic_data *muic_data)
+{
+	struct muic_platform_data *muic_pdata = muic_data->pdata;
+	int vbus = 0;
+	u8 device_typ1 = 0;
+
+	vbus = s2mu106_hv_muic_get_vchgin(muic_data);
+	device_typ1 = s2mu106_i2c_read_byte(muic_data->i2c, S2MU106_REG_DEVICE_TYP1);
+	pr_info("%s vbus = %d, afc_disable = %d, DEVICE_TYPE1 = %#x\n",
+			__func__, vbus, muic_pdata->afc_disable, device_typ1);
+
+	if ((device_typ1 & S2MU106_DCPCHG_MASK) == 0)
+		return;
+
+	if (muic_pdata->afc_disable == true) {
+		/* Set DCP 5V type, because user turned off high-voltage charging */
+		_s2mu106_hv_muic_reset(muic_data);
+		s2mu106_hv_muic_handle_attach(muic_data, ATTACHED_DEV_AFC_CHARGER_DISABLED_MUIC);
+	} else {
+		/* Since user activate high-voltage charging again, do it again from HVDCP detection */
+		muic_core_hv_state_manager(muic_pdata, HV_TRANS_DCP_DETECTED);
+	}
+}
 
 static void s2mu106_if_hv_muic_reset(void *mdata)
 {
@@ -552,6 +578,7 @@ static void s2mu106_hv_muic_handle_attach(struct s2mu106_muic_data* muic_data,
 
 	switch (new_dev) {
 	case ATTACHED_DEV_TA_MUIC:
+	case ATTACHED_DEV_AFC_CHARGER_DISABLED_MUIC:
 	case ATTACHED_DEV_AFC_CHARGER_PREPARE_MUIC:
 	case ATTACHED_DEV_AFC_CHARGER_PREPARE_DUPLI_MUIC:
 	case ATTACHED_DEV_AFC_CHARGER_5V_MUIC:
@@ -734,6 +761,7 @@ static int s2mu106_if_afc_get_voltage(void *mdata)
 	case ATTACHED_DEV_TA_MUIC:
 	case ATTACHED_DEV_AFC_CHARGER_PREPARE_MUIC:
 	case ATTACHED_DEV_AFC_CHARGER_5V_MUIC:
+	case ATTACHED_DEV_AFC_CHARGER_DISABLED_MUIC:
 	case ATTACHED_DEV_QC_CHARGER_PREPARE_MUIC:
 	case ATTACHED_DEV_QC_CHARGER_5V_MUIC:
 		ret = 5;
@@ -775,6 +803,15 @@ static int s2mu106_if_afc_set_voltage(void *mdata, int vol)
 	return ret;
 }
 #endif /* CONFIG_HV_MUIC_VOLTAGE_CTRL */
+
+static void s2mu106_if_set_chgtype_usrcmd(void *mdata)
+{
+	struct s2mu106_muic_data *muic_data = (struct s2mu106_muic_data *)mdata;
+
+	mutex_lock(&muic_data->afc_mutex);
+	s2mu106_hv_muic_set_chgtype_usrcmd(muic_data);
+	mutex_unlock(&muic_data->afc_mutex);
+}
 
 /*
  * Work queue functions
@@ -878,9 +915,12 @@ static irqreturn_t s2mu106_hv_muic_vdnmon_isr(int irq, void *data)
 		msleep(110);
 		vbus = s2mu106_i2c_read_byte(muic_data->i2c, S2MU106_REG_DEVICE_APPLE);
 		vbus &= S2MU106_VBUS_WAKEUP_MASK;
-		if (vbus)
-			muic_core_hv_state_manager(muic_pdata, HV_TRANS_VDNMON_LOW);
-		else
+		if (vbus) {
+			if (muic_data->pdata->afc_disable == false)
+				muic_core_hv_state_manager(muic_pdata, HV_TRANS_VDNMON_LOW);
+			else
+				s2mu106_hv_muic_set_chgtype_usrcmd(muic_data);
+		} else
 			pr_err("%s skip to handle vdnmon: invalid vbus\n", __func__);
 	}
 
@@ -1013,6 +1053,7 @@ int s2mu106_hv_muic_init(struct s2mu106_muic_data *muic_data)
 	muic_if->afc_get_voltage = s2mu106_if_afc_get_voltage;
 	muic_if->afc_set_voltage = s2mu106_if_afc_set_voltage;
 #endif
+	muic_if->set_chgtype_usrcmd = s2mu106_if_set_chgtype_usrcmd;
 	muic_if->hv_reset = s2mu106_if_hv_muic_reset;
 	muic_if->hv_dcp_charger = s2mu106_if_hv_muic_dcp_charger;
 	muic_if->hv_fast_charge_adaptor = s2mu106_if_hv_muic_fast_charge_adaptor;

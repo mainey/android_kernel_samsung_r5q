@@ -83,6 +83,8 @@
 		fuelgauge,type_str = "SDI";
 		fuelgauge,fg_log_enable = <1>;
 		fuelgauge,low_voltage_limit_lowtemp = <3100>;
+		fuelgauge,i_socr_coeff = <80>;
+		fuelgauge,low_t_compen_coeff = <180>;
 
 		fuelgauge,ttf_capacity = <4370>;
 		fuelgauge,cv_data = <
@@ -501,7 +503,7 @@
 		battery,cisd_max_voltage_thr = <5000>; /* batttery ovp dettection voltage */
 		battery,cisd_alg_index = <8>;
 		battery,ignore_cisd_index = <0 960>; /* Do not use AFC_FAIL to DROP_VALUE */
-		battery,ignore_cisd_index_d = <0 120>; /* Do not use AFC_FAIL_PER_DAY to DROP_VALUE_PER_DAY */ 
+		battery,ignore_cisd_index_d = <0 120>; /* Do not use AFC_FAIL_PER_DAY to DROP_VALUE_PER_DAY */
 
 		battery,tx_stop_capacity = <30>;
 		battery,tx_minduty_default = <20>;

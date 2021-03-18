@@ -7298,7 +7298,8 @@ ufshcd_transfer_rsp_status(struct ufs_hba *hba, struct ufshcd_lrb *lrbp)
 			 * UFS device needs urgent BKOPs.
 			 */
 			if (!hba->pm_op_in_progress &&
-			    ufshcd_is_exception_event(lrbp->ucd_rsp_ptr)) {
+			    ufshcd_is_exception_event(lrbp->ucd_rsp_ptr) &&
+			    scsi_host_in_recovery(hba->host)) {
 				/*
 				 * Prevent suspend once eeh_work is scheduled
 				 * to avoid deadlock between ufshcd_suspend
@@ -11613,7 +11614,8 @@ enable_gating:
 	ufshcd_release_all(hba);
 	ufshcd_crypto_resume(hba, pm_op);
 out:
-	if (!ret && ufshcd_is_system_pm(pm_op))
+	if (!ret && (ufshcd_is_system_pm(pm_op) ||
+				ufshcd_is_shutdown_pm(pm_op)))
 		hba->tw_state_not_allowed = true;
 
 	hba->pm_op_in_progress = 0;
@@ -11767,7 +11769,7 @@ disable_irq_and_vops_clks:
 out:
 	hba->pm_op_in_progress = 0;
 
-	if (hba->tw_state_not_allowed)
+	if (!ret && hba->tw_state_not_allowed)
 		hba->tw_state_not_allowed = false;
 
 	if (hba->restore)

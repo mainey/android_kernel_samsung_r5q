@@ -200,6 +200,37 @@ static ssize_t adsp_ssr_store(struct kobject *kobj,
 	return count;
 }
 
+int adsp_ssr(void)
+{
+	struct subsys_device *adsp_dev = NULL;
+	struct platform_device *pdev = adsp_private;
+	struct adsp_loader_private *priv = NULL;
+	int rc;
+
+	priv = platform_get_drvdata(pdev);
+	if (!priv)
+		return -EINVAL;
+
+	adsp_dev = (struct subsys_device *)priv->pil_h;
+	if (!adsp_dev)
+		return -EINVAL;
+
+#ifndef CONFIG_SEC_SND_DEBUG
+	dev_info(&pdev->dev, "requesting for ADSP restart\n");
+	subsys_set_adsp_silent_ssr(true);
+#endif /* CONFIG_SEC_SND_DEBUG */
+
+	/* subsystem_restart_dev has worker queue to handle */
+	rc = subsystem_restart_dev(adsp_dev);
+	if (rc) {
+		dev_err(&pdev->dev, "subsystem_restart_dev failed\n");
+		return rc;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(adsp_ssr);
+
 static ssize_t adsp_boot_store(struct kobject *kobj,
 	struct kobj_attribute *attr,
 	const char *buf,

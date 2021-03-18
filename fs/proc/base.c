@@ -100,6 +100,7 @@
 #ifdef CONFIG_HARDWALL
 #include <asm/hardwall.h>
 #endif
+#include <linux/cn_proc.h>
 #include <trace/events/oom.h>
 #include "internal.h"
 #include "fd.h"
@@ -1772,8 +1773,10 @@ static ssize_t comm_write(struct file *file, const char __user *buf,
 	if (!p)
 		return -ESRCH;
 
-	if (same_thread_group(current, p))
+	if (same_thread_group(current, p)) {
 		set_task_comm(p, buffer);
+		proc_comm_connector(p);
+	}
 	else
 		count = -EINVAL;
 
@@ -3614,7 +3617,6 @@ static const struct pid_entry tgid_base_stuff[] = {
 	REG("maps",       S_IRUGO, proc_pid_maps_operations),
 #ifdef CONFIG_PAGE_BOOST
 	REG("filemap_list",       S_IRUGO, proc_pid_filemap_list_operations),
-	REG("filemap_info",       S_IRUGO|S_IWUGO, proc_pid_filemap_info_operations),
 	ONE("ioinfo",  S_IRUGO, proc_pid_ioinfo),
 #ifdef CONFIG_PAGE_BOOST_RECORDING
 	REG("io_record_control",      S_IRUGO|S_IWUGO, proc_pid_io_record_operations),

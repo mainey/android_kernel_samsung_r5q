@@ -449,6 +449,8 @@
 		battery,tx_mfc_iout_phone_5v = <300>;
 		battery,tx_mfc_iout_lcd_on = <900>;
 
+		battery,support_unknown_wpcthm;
+
 		io-channels = <&pm8150l_vadc ADC_GPIO1_PU2>, <&pm8150l_vadc ADC_AMUX_THM3_PU2>, <&pm8150l_vadc ADC_GPIO1_PU2>, <&pm8150l_vadc ADC_AMUX_THM1_PU2>;
 		io-channel-names = "adc-temp", "adc-chg-temp", "adc-wpc-temp", "adc-usb-temp";
 	};
@@ -462,7 +464,7 @@
 		fuelgauge,capacity_max = <1000>;
 		fuelgauge,capacity_max_margin = <300>;
 		fuelgauge,capacity_min = <0>;
-		fuelgauge,capacity_calculation_type = <28>;
+		fuelgauge,capacity_calculation_type = <0x5C>;
 		fuelgauge,repeated_fuelalert;
 		fuelgauge,using_temp_compensation;
 		fuelgauge,low_temp_limit = <100>;
@@ -477,6 +479,13 @@
 		fuelgauge,fg_reset_wa_data = <0x0686 0x3200 0x0191 0x0024 0x1426>; /* fullcapnom(=capacity), dPacc, dQacc,  rcomp0, tempco */
 		fuelgauge,discharge_temp_threshold = <600>;
 		fuelgauge,discharge_volt_threshold = <4200>;
+
+		fuelgauge,lost_soc_trig_soc = <1000>; /* 100.0% */
+		fuelgauge,lost_soc_trig_d_soc = <20>; /* 2% */
+		fuelgauge,lost_soc_trig_scale = <2>; /* 2x */
+		fuelgauge,lost_soc_guarantee_soc = <30>; /* 3.0% */
+		fuelgauge,lost_soc_min_vol = <3200>; /* 3200mV */
+
 		fuelgauge,ttf_capacity = <4300>;
 		fuelgauge,cv_data = <
 			2488	829	1809

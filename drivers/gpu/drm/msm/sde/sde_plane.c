@@ -45,6 +45,12 @@
 #ifdef CONFIG_SEC_DEBUG
 #include <linux/sec_debug.h>
 #endif
+#elif defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+#include "sde_encoder.h"
+#include "../samsung_lego/ss_dsi_panel_common.h"
+#ifdef CONFIG_SEC_DEBUG
+#include <linux/sec_debug.h>
+#endif
 #endif
 
 /* FOD-HBM dimming */
@@ -920,7 +926,7 @@ int sde_plane_wait_input_fence(struct drm_plane *plane, uint32_t wait_ms)
 						wait_ms, prefix);
 				psde->is_error = true;
 				sde_kms_timeline_status(plane->dev);
-#if defined(CONFIG_DISPLAY_SAMSUNG)
+#if defined(CONFIG_DISPLAY_SAMSUNG) || defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
 				{
 					struct dma_fence *tout_fence = input_fence;
 
@@ -3861,7 +3867,7 @@ void sde_plane_flush(struct drm_plane *plane)
 {
 	struct sde_plane *psde;
 	struct sde_plane_state *pstate;
-#if defined(CONFIG_DISPLAY_SAMSUNG)
+#if defined(CONFIG_DISPLAY_SAMSUNG) || defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
 	struct samsung_display_driver_data *vdd;
 #endif
 
@@ -3886,7 +3892,7 @@ void sde_plane_flush(struct drm_plane *plane)
 	else if (psde->pipe_hw && psde->csc_ptr && psde->pipe_hw->ops.setup_csc)
 		psde->pipe_hw->ops.setup_csc(psde->pipe_hw, psde->csc_ptr);
 	
-#if defined(CONFIG_DISPLAY_SAMSUNG)
+#if defined(CONFIG_DISPLAY_SAMSUNG) || defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
 	if (plane->crtc) {
 		vdd = ss_get_vdd(plane->crtc->index);
 		if (vdd && vdd->force_white_flush) {

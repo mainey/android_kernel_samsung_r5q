@@ -62,6 +62,7 @@ module_param(enable_debug, int, 0644);
 static bool silent_ssr[N_SSR];
 #define STOP_REASON_0_BIT 0x10
 #define STOP_REASON_1_BIT 0x20
+static bool adsp_silent_ssr;
 
 /* The maximum shutdown timeout is the product of MAX_LOOPS and DELAY_MS. */
 #define SHUTDOWN_ACK_MAX_LOOPS	100
@@ -1376,7 +1377,11 @@ int subsystem_restart_dev(struct subsys_device *dev)
 		subsys_set_modem_silent_ssr(false, ESOC_SSR);
 	}
 
-
+	/* force adsp silent ssr */
+	if (!strncmp(name, "adsp", 4) && adsp_silent_ssr) {
+		dev->restart_level = RESET_SUBSYS_COUPLED;
+		adsp_silent_ssr = false;
+	}
 #ifdef CONFIG_SENSORS_SSC
 	if (!strcmp(name, "slpi")) {
 #if defined(CONFIG_SEC_FACTORY) && defined(CONFIG_SUPPORT_DUAL_6AXIS)
@@ -1511,6 +1516,12 @@ void subsys_set_modem_silent_ssr(bool value, int id)
 			(id == MODEM_SSR) ? "modem" : "esoc", value);
 }
 EXPORT_SYMBOL(subsys_set_modem_silent_ssr);
+
+void subsys_set_adsp_silent_ssr(bool value)
+{
+	adsp_silent_ssr = value;
+}
+EXPORT_SYMBOL(subsys_set_adsp_silent_ssr);
 
 void subsys_force_stop(const char *name, bool val)
 {

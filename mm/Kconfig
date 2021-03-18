@@ -926,6 +926,14 @@ config PAGE_BOOST_RECORDING
 	  As Android executes an app one by one, only allow 1 recording
 	  at a time.
 
+config MEMCG_HEIMDALL
+	bool "memcg optimization for heimdall"
+	depends on MEMCG
+	default y
+	help
+	  Enable this will change the memcg-related logics in the way Heimdall
+	  prefers.
+
 config KZEROD
 	bool "Support kzerod"
 	default n

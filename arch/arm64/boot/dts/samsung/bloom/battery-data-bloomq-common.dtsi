@@ -399,10 +399,10 @@
 
 		battery,wireless_otg_input_current = <900>;
 
-		battery,ttf_hv_charge_current = <2250>;
-		battery,ttf_hv_12v_wireless_charge_current = <1800>;
-		battery,ttf_hv_wireless_charge_current = <1350>;
-		battery,ttf_wireless_charge_current = <970>;
+		battery,ttf_hv_charge_current = <2600>;
+		battery,ttf_hv_12v_wireless_charge_current = <1660>;
+		battery,ttf_hv_wireless_charge_current = <990>;
+		battery,ttf_wireless_charge_current = <705>;
 
 		battery,rp_current_rp1 = <500>;
 		battery,rp_current_rp2 = <1500>;
@@ -482,7 +482,7 @@
 		fuelgauge,capacity_max = <1000>;
 		fuelgauge,capacity_max_margin = <300>;
 		fuelgauge,capacity_min = <0>;
-		fuelgauge,capacity_calculation_type = <28>;
+		fuelgauge,capacity_calculation_type = <0x5C>;
 		fuelgauge,repeated_fuelalert;
 		fuelgauge,using_temp_compensation;
 		fuelgauge,low_temp_limit = <100>;
@@ -499,21 +499,69 @@
 		fuelgauge,fg_reset_wa_data = <0x0c35 0x3200 0x030d 0x005F 0x182b>; /* fullcapnom(=capacity), dPacc, dQacc,  rcomp0, tempco */
 		fuelgauge,discharge_temp_threshold = <600>;
 		fuelgauge,discharge_volt_threshold = <4200>;
-		fuelgauge,ttf_capacity = <FULL_CAPACITY>;
+
+		fuelgauge,lost_soc_trig_soc = <1000>; /* 100.0% */
+		fuelgauge,lost_soc_trig_d_soc = <20>; /* 2% */
+		fuelgauge,lost_soc_trig_scale = <2>; /* 2x */
+		fuelgauge,lost_soc_guarantee_soc = <30>; /* 3.0% */
+		fuelgauge,lost_soc_min_vol = <3200>; /* 3200mV */
+
+		fuelgauge,ttf_capacity = <2400>;
 		fuelgauge,rcomp0_offset = <0x1B>;
 		fuelgauge,cv_data = <
-			2332	653	3150
-			2275	686	3000
-			2049	753	2700
-			1690	806	2400
-			1350	867	2100
-			1079	907	1800
-			868	928	1500
-			705	946	1200
-			569	958	900
-			488	970	600
-			392	985	300
-			0	1000	0
+			2190	686	4020
+			2185	698	3960
+			2140	702	3900
+			2126	714	3840
+			2079	725	3780
+			2056	736	3720
+			2017	748	3660
+			1970	758	3600
+			1923	768	3540
+			1859	779	3480
+			1799	789	3420
+			1731	798	3360
+			1657	808	3300
+			1587	817	3240
+			1514	825	3180
+			1457	832	3120
+			1374	841	3060
+			1321	848	3000
+			1257	855	2040
+			1194	862	1980
+			1137	868	1920
+			1088	874	1860
+			1025	879	1800
+			999	885	1740
+			957	899	1680
+			916	895	1620
+			876	900	1560
+			830	906	1500
+			792	909	1440
+			750	913	1380
+			733	918	1320
+			703	921	1260
+			660	925	1200
+			638	928	1140
+			627	932	1080
+			600	935	1020
+			566	938	960
+			548	942	900
+			541	944	840
+			522	947	780
+			497	950	720
+			470	953	660
+			460	955	600
+			446	958	540
+			416	960	480
+			400	962	420
+			398	965	360
+			376	967	300
+			375	969	240
+			365	974	180
+			341	984	120
+			322	995	60
+			320	1000	0
 			>;
 	};
 
@@ -658,7 +706,7 @@
 			vout = <5500>;
 			input_current_limit = <WC_5V_CURRENT>;
 			fast_charging_current = <MAX_CURRENT>;
-			ttf_charge_current = <970>; /* same with ttf_wireless_charge_current */
+			ttf_charge_current = <705>; /* same with ttf_wireless_charge_current */
 			rx_power = <4500>;
 		};
 		current_group_1 {
@@ -666,7 +714,7 @@
 			vout = <10000>;
 			input_current_limit = <750>;
 			fast_charging_current = <MAX_CURRENT>;
-			ttf_charge_current = <1350>; /* same with ttf_hv_wireless_charge_current */
+			ttf_charge_current = <990>; /* same with ttf_hv_wireless_charge_current */
 			rx_power = <7500>;
 		};
 		current_group_2 {
@@ -674,7 +722,7 @@
 			vout = <10000>;
 			input_current_limit = <900>;
 			fast_charging_current = <MAX_CURRENT>;
-			ttf_charge_current = <1800>; /* same with ttf_hv_12v_wireless_charge_current */
+			ttf_charge_current = <1660>; /* same with ttf_hv_12v_wireless_charge_current */
 			rx_power = <9000>;
 		};
 	};
