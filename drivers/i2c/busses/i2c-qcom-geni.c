@@ -228,6 +228,11 @@ static inline void qcom_geni_i2c_calc_timeout(struct geni_i2c_dev *gi2c)
 							I2C_TIMEOUT_MIN_USEC;
 
 	gi2c->xfer_timeout = usecs_to_jiffies(xfer_max_usec);
+#if defined(CONFIG_SEC_A82XQ_PROJECT)//OIS issue fix QC case 05086280
+	gi2c->xfer_timeout += 250;
+#else
+	gi2c->xfer_timeout += 50;
+#endif
 }
 
 static void geni_i2c_err(struct geni_i2c_dev *gi2c, int err)
@@ -251,6 +256,9 @@ static irqreturn_t geni_i2c_irq(int irq, void *dev)
 	int i, j;
 	u32 m_stat, rx_st, dm_tx_st, dm_rx_st, dma;
 	struct i2c_msg *cur = gi2c->cur;
+    static int irq_count_400 = 0;
+    static int irq_count_409 = 0;
+    static int irq_count_410 = 0;
 
 	if (gi2c->i2c_ssr.is_ssr_down) {
 		gi2c->cmd_done = false;
@@ -258,6 +266,28 @@ static irqreturn_t geni_i2c_irq(int irq, void *dev)
 		GENI_SE_DBG(gi2c->ipcl, false, gi2c->dev,
 			"%s: SSR down\n", __func__);
 		return IRQ_HANDLED;
+	}
+
+    if (irq == 400 ) { //Please change the IRQ number accordingly based on the issue
+	  irq_count_400++;
+	  if (irq_count_400 % 10000 == 0) {
+	  dev_err(gi2c->dev, "%s, irq:%d, irq_count_400:%d\n",__func__, irq, irq_count_400);
+	  geni_se_dump_dbg_regs(&gi2c->i2c_rsc, gi2c->base, gi2c->ipcl);
+	  }
+	}
+    else if (irq == 409 ) { //Please change the IRQ number accordingly based on the issue
+	  irq_count_409++;
+	  if (irq_count_409 % 10000 == 0) {
+	  dev_err(gi2c->dev, "%s, irq:%d, irq_count_409:%d\n",__func__, irq, irq_count_409);
+	  geni_se_dump_dbg_regs(&gi2c->i2c_rsc, gi2c->base, gi2c->ipcl);
+	  }
+	}
+	  else if (irq == 410 ) { //Please change the IRQ number accordingly based on the issue
+	  irq_count_410++;
+	  if (irq_count_410 % 10000 == 0) {
+	  dev_err(gi2c->dev, "%s, irq:%d, irq_count_410:%d\n",__func__, irq, irq_count_410);
+	  geni_se_dump_dbg_regs(&gi2c->i2c_rsc, gi2c->base, gi2c->ipcl);
+	  }
 	}
 
 	m_stat = readl_relaxed(gi2c->base + SE_GENI_M_IRQ_STATUS);
@@ -854,9 +884,21 @@ static int geni_i2c_xfer(struct i2c_adapter *adap,
 			}
 
 			if (!timeout) {
+#if defined(CONFIG_SEC_A82XQ_PROJECT)//OIS issue fix QC case 05110239
+				GENI_SE_ERR(gi2c->ipcl, true, gi2c->dev,
+					"Cancel failed\n");
+				reinit_completion(&gi2c->xfer);
+ 				geni_abort_m_cmd(gi2c->base);
+				timeout =
+				wait_for_completion_timeout(&gi2c->xfer, HZ);
+				if (!timeout)
+					GENI_SE_ERR(gi2c->ipcl, true, gi2c->dev,
+						"Abort failed\n");
+#else
 				GENI_SE_ERR(gi2c->ipcl, true, gi2c->dev,
 					"Abort\n");
 				geni_abort_m_cmd(gi2c->base);
+#endif
 			}
 		}
 		gi2c->cur_wr = 0;

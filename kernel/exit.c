@@ -68,6 +68,14 @@
 #include <asm/pgtable.h>
 #include <asm/mmu_context.h>
 
+#ifdef CONFIG_SECURITY_DEFEX
+#include <linux/defex.h>
+#endif
+
+#ifdef CONFIG_SEC_DEBUG
+#include <linux/sec_debug.h>
+#endif
+
 static void __unhash_process(struct task_struct *p, bool group_dead)
 {
 	nr_threads--;
@@ -778,7 +786,13 @@ static inline void check_stack_usage(void) {}
 void __noreturn do_exit(long code)
 {
 	struct task_struct *tsk = current;
+	struct pid_namespace *pid_ns;
+	struct task_struct *reaper;
 	int group_dead;
+
+#ifdef CONFIG_SECURITY_DEFEX
+	task_defex_zero_creds(current);
+#endif
 
 	/*
 	 * We can get here from a kernel oops, sometimes with preemption off.
@@ -863,6 +877,26 @@ void __noreturn do_exit(long code)
 
 	tsk->exit_code = code;
 	taskstats_exit(tsk, group_dead);
+
+#ifdef CONFIG_SEC_DEBUG
+	if (sec_debug_is_enabled()) {
+		write_lock_irq(&tasklist_lock);
+		pid_ns = task_active_pid_ns(tsk);
+		if (unlikely(pid_ns == &init_pid_ns)) {
+			reaper = pid_ns->child_reaper;
+			if (unlikely(reaper == tsk)) {
+				reaper = find_alive_thread(tsk);
+				if (unlikely(!reaper)) {
+					write_unlock_irq(&tasklist_lock);
+					panic("Attempted to kill init! exitcode=0x%08x\n",
+						tsk->signal->group_exit_code ?: tsk->exit_code);
+					write_lock_irq(&tasklist_lock);
+				}
+			}
+		}
+		write_unlock_irq(&tasklist_lock);
+	}
+#endif
 
 	exit_mm();
 

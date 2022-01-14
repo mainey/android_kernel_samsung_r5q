@@ -1239,6 +1239,7 @@ static int npu_close(struct inode *inode, struct file *file)
 {
 	struct npu_client *client = file->private_data;
 	struct npu_kevent *kevent;
+	
 
 	npu_host_cleanup_networks(client);
 
@@ -1577,7 +1578,7 @@ static int npu_process_kevent(struct npu_kevent *kevt)
 	switch (kevt->evt.type) {
 	case MSM_NPU_EVENT_TYPE_EXEC_V2_DONE:
 		ret = copy_to_user((void __user *)kevt->reserved[1],
-			(void *)&kevt->reserved[0],
+			(void *)kevt->reserved[0],
 			kevt->evt.u.exec_v2_done.stats_buf_size);
 		if (ret) {
 			pr_err("fail to copy to user\n");

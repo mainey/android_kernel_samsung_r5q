@@ -60,6 +60,28 @@
 #define MSM_VERSION_MINOR	2
 #define MSM_VERSION_PATCHLEVEL	0
 
+static BLOCKING_NOTIFIER_HEAD(msm_drm_notifier_list);
+
+int msm_drm_register_notifier_client(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_register(&msm_drm_notifier_list, nb);
+}
+EXPORT_SYMBOL(msm_drm_register_notifier_client);
+
+int msm_drm_unregister_notifier_client(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_unregister(&msm_drm_notifier_list, nb);
+}
+EXPORT_SYMBOL(msm_drm_unregister_notifier_client);
+
+#if defined(CONFIG_DISPLAY_SAMSUNG) || defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+int __msm_drm_notifier_call_chain(unsigned long event, void *data)
+{
+	return blocking_notifier_call_chain(&msm_drm_notifier_list,
+					event, data);
+}
+#endif
+
 static void msm_fb_output_poll_changed(struct drm_device *dev)
 {
 	struct msm_drm_private *priv = NULL;
@@ -503,6 +525,8 @@ static int msm_drm_init(struct device *dev, struct drm_driver *drv)
 	int ret, i;
 	struct sched_param param;
 
+	pr_err("%s ++ \n", __func__);
+
 	ddev = drm_dev_alloc(drv, dev);
 	if (!ddev) {
 		dev_err(dev, "failed to allocate drm_device\n");
@@ -769,6 +793,8 @@ static int msm_drm_init(struct device *dev, struct drm_driver *drv)
 	drm_kms_helper_poll_init(ddev);
 	place_marker("M - DISPLAY Driver Ready");
 
+	pr_err("%s -- \n", __func__);
+
 	return 0;
 
 fail:
@@ -786,6 +812,9 @@ mdss_init_fail:
 	kfree(priv);
 priv_alloc_fail:
 	drm_dev_unref(ddev);
+
+	pr_err("%s error -- \n", __func__);
+
 	return ret;
 }
 
@@ -810,6 +839,11 @@ static void load_gpu(struct drm_device *dev)
 
 	mutex_unlock(&init_lock);
 }
+#endif
+
+#if defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+struct msm_file_private *msm_ioctl_power_ctrl_ctx;
+DEFINE_MUTEX(msm_ioctl_power_ctrl_ctx_lock);
 #endif
 
 static int msm_open(struct drm_device *dev, struct drm_file *file)
@@ -870,6 +904,13 @@ static void msm_postclose(struct drm_device *dev, struct drm_file *file)
 				priv->pclient, false);
 	}
 	mutex_unlock(&ctx->power_lock);
+
+#if defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+	mutex_lock(&msm_ioctl_power_ctrl_ctx_lock);
+	if (msm_ioctl_power_ctrl_ctx == ctx)
+		msm_ioctl_power_ctrl_ctx = NULL;
+	mutex_unlock(&msm_ioctl_power_ctrl_ctx_lock);
+#endif
 
 	kfree(ctx);
 }
@@ -1614,6 +1655,12 @@ static int msm_ioctl_power_ctrl(struct drm_device *dev, void *data,
 
 	priv = dev->dev_private;
 
+#if defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+	mutex_lock(&msm_ioctl_power_ctrl_ctx_lock);
+	msm_ioctl_power_ctrl_ctx = ctx;
+	mutex_unlock(&msm_ioctl_power_ctrl_ctx_lock);
+#endif
+
 	mutex_lock(&ctx->power_lock);
 
 	old_cnt = ctx->enable_refcnt;
@@ -1790,9 +1837,15 @@ static int msm_runtime_suspend(struct device *dev)
 	struct msm_drm_private *priv = ddev->dev_private;
 
 	DBG("");
-
+#if defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+	if (priv->mdss)
+		msm_mdss_disable(priv->mdss);
+	else
+		sde_power_resource_enable(&priv->phandle, priv->pclient, false);
+#else
 	if (priv->mdss)
 		return msm_mdss_disable(priv->mdss);
+#endif
 
 	return 0;
 }
@@ -1802,12 +1855,25 @@ static int msm_runtime_resume(struct device *dev)
 	struct drm_device *ddev = dev_get_drvdata(dev);
 	struct msm_drm_private *priv = ddev->dev_private;
 
+#if defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+	int ret;
+
+	DBG("");
+
+	if (priv->mdss)
+		ret = msm_mdss_enable(priv->mdss);
+	else
+		ret = sde_power_resource_enable(&priv->phandle, priv->pclient, true);
+
+	return ret;
+#else
 	DBG("");
 
 	if (priv->mdss)
 		return msm_mdss_enable(priv->mdss);
 
 	return 0;
+#endif
 }
 #endif
 
@@ -1912,6 +1978,12 @@ static int add_display_components(struct device *dev,
 			node = of_parse_phandle(np, "connectors", i);
 			if (!node)
 				break;
+#ifndef CONFIG_SEC_DISPLAYPORT
+			if (!strncmp(node->name, "qcom,dp_display", 15)) {
+				pr_info("[drm-dp] disabled displayport!\n");
+				continue;
+			}
+#endif
 
 			component_match_add(dev, matchptr, compare_of, node);
 		}
@@ -2007,6 +2079,7 @@ int msm_get_mixer_count(struct msm_drm_private *priv,
 	return funcs->get_mixer_count(priv->kms, mode,
 			max_mixer_width, num_lm);
 }
+
 /*
  * We don't know what's the best binding to link the gpu with the drm device.
  * Fow now, we just hunt for all the possible gpus that we support, and add them

@@ -760,7 +760,7 @@ config QCOM_QDSS_BRIDGE
 
 config QTI_RPM_STATS_LOG
 	bool "Qualcomm Technologies RPM Stats Driver"
-	depends on DEBUG_FS
+	depends on QTI_RPMH_API
 	default n
 	help
 	  This option enables a driver which reads RPM messages from a shared
@@ -986,6 +986,7 @@ config QCOM_CX_IPEAK
 
 config QCOM_AOP_DDR_MESSAGING
 	bool "Send messages to AOP about the DDR frequency during reboot"
+	default n
 	help
 	  This driver sends messages to the AOP to adjust the DDR frequency when
 	  the device is rebooting, to ensure that the device is powered off

@@ -295,7 +295,7 @@ static void a6xx_gmu_power_config(struct kgsl_device *device)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	struct gmu_device *gmu = KGSL_GMU_DEVICE(device);
-
+ 
 	/* Configure registers for idle setting. The setting is cumulative */
 
 	/* Disable GMU WB/RB buffer and caches at boot */
@@ -1633,6 +1633,11 @@ static void a6xx_gmu_snapshot(struct adreno_device *adreno_dev,
 
 	if (!gmu_core_isenabled(device))
 		return;
+
+#if 0
+	KGSL_DRV_ERR(device, "force return due to NOC error\n");
+	return;
+#endif
 
 	for (i = 0; i < ARRAY_SIZE(desc); i++) {
 		if (desc[i].memdesc)

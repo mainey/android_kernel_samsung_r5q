@@ -19,6 +19,9 @@
 #include <linux/usb/quirks.h>
 #include <linux/usb/hcd.h>	/* for usbcore internals */
 #include <asm/byteorder.h>
+#ifdef CONFIG_USB_AUDIO_ENHANCED_DETECT_TIME
+#include <linux/usb_notify.h>
+#endif
 
 #include "usb.h"
 
@@ -1701,7 +1704,6 @@ static void __usb_queue_reset_device(struct work_struct *ws)
 	usb_put_intf(iface);	/* Undo _get_ in usb_queue_reset_device() */
 }
 
-
 /*
  * usb_set_configuration - Makes a particular device setting be current
  * @dev: the device whose configuration is being updated
@@ -1928,6 +1930,11 @@ free_interfaces:
 		return ret;
 	}
 	usb_set_device_state(dev, USB_STATE_CONFIGURED);
+
+#ifdef CONFIG_USB_AUDIO_ENHANCED_DETECT_TIME
+	/* temp disable for audio issue */
+	//send_usb_audio_uevent(dev);
+#endif
 
 	if (cp->string == NULL &&
 			!(dev->quirks & USB_QUIRK_CONFIG_INTF_STRINGS))

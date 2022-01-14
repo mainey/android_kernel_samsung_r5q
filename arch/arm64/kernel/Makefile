@@ -11,6 +11,14 @@ CFLAGS_REMOVE_ftrace.o = -pg
 CFLAGS_REMOVE_insn.o = -pg
 CFLAGS_REMOVE_return_address.o = -pg
 
+KASAN_SANITIZE_stacktrace.o	:= n
+
+# If instrumentation of this dir is enabled, boot hangs during first second.
+# Probably could be more selective here, but note that files related to irqs,
+# boot, dumpstack/stacktrace, etc are either non-interesting or can lead to
+# non-deterministic coverage.
+KCOV_INSTRUMENT		:= n
+
 CFLAGS_setup.o = -DUTS_MACHINE='"$(UTS_MACHINE)"'
 
 # Object file lists.
@@ -55,6 +63,7 @@ arm64-obj-$(CONFIG_KEXEC)		+= machine_kexec.o relocate_kernel.o	\
 arm64-obj-$(CONFIG_ARM64_RELOC_TEST)	+= arm64-reloc-test.o
 arm64-reloc-test-y := reloc_test_core.o reloc_test_syms.o
 arm64-obj-$(CONFIG_CRASH_DUMP)		+= crash_dump.o
+arm64-obj-$(CONFIG_RKP_CFP_ROPP)	+= rkp_cfp.o
 arm64-obj-$(CONFIG_ARM64_SSBD)		+= ssbd.o
 arm64-obj-$(CONFIG_SHADOW_CALL_STACK)	+= scs.o
 
@@ -62,6 +71,8 @@ ifeq ($(CONFIG_KVM),y)
 arm64-obj-$(CONFIG_HARDEN_BRANCH_PREDICTOR)	+= bpi.o
 endif
 arm64-obj-$(CONFIG_ARM64_SSBD)		+= ssbd.o
+
+arm64-obj-$(CONFIG_UH)			+= uh_entry.o
 
 obj-y					+= $(arm64-obj-y) vdso/ probes/
 obj-m					+= $(arm64-obj-m)

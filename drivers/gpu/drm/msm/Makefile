@@ -5,9 +5,15 @@ ccflags-$(CONFIG_DRM_MSM_DSI) += -Idrivers/gpu/drm/msm/dsi
 ccflags-$(CONFIG_DRM_MSM_DSI_PLL) += -Idrivers/gpu/drm/msm/dsi
 ccflags-y += -Idrivers/gpu/drm/msm/sde
 ccflags-y += -Idrivers/media/platform/msm/sde/rotator
+ccflags-$(CONFIG_DISPLAY_SAMSUNG) += -Idrivers/gpu/drm/msm/samsung
 ccflags-y += -Idrivers/gpu/drm/msm/hdmi
 ccflags-$(CONFIG_DRM_SDE_SHD) += -Idrivers/gpu/drm/msm/shd
 ccflags-$(CONFIG_DRM_SDE_SHP) += -Idrivers/gpu/drm/msm/shp
+
+ifeq ($(CONFIG_DISPLAY_SAMSUNG_LEGO),y)
+ccflags-y += -I$(srctree)/drivers/clk/qcom/
+ccflags-y += -I$(srctree)/drivers/gpu/drm/msm/samsung_lego
+endif
 
 msm_drm-y := \
 	dp/dp_usbpd.o \
@@ -52,11 +58,10 @@ msm_drm-y := \
 	sde/sde_hw_color_proc_v4.o \
 	sde/sde_hw_ad4.o \
 	sde_edid_parser.o \
+	sde_dbg.o \
+	sde_dbg_evtlog.o \
 	sde_hdcp_1x.o \
 	sde_hdcp_2x.o
-
-msm_drm-$(CONFIG_DEBUG_FS) += sde_dbg.o \
-	sde_dbg_evtlog.o \
 
 msm_drm-$(CONFIG_DRM_MSM_HDMI) += hdmi/hdmi.o \
 	hdmi/hdmi_audio.o \
@@ -88,6 +93,14 @@ msm_drm-$(CONFIG_DRM_MSM_MDP5) += mdp/mdp_format.o \
 	mdp/mdp5/mdp5_mixer.o \
 	mdp/mdp5/mdp5_plane.o \
 	mdp/mdp5/mdp5_smp.o \
+
+# sec displayport
+msm_drm-$(CONFIG_SEC_DISPLAYPORT) += dp/secdp_sysfs.o \
+	dp/secdp_logger.o \
+	dp/secdp_unit_test.o \
+	dp/secdp_aux_control.o \
+
+msm_drm-$(CONFIG_SEC_DISPLAYPORT_BIGDATA) += dp/displayport_bigdata.o
 
 msm_drm-$(CONFIG_DRM_SDE_RSC) += sde_rsc.o \
 	sde_rsc_hw.o \
@@ -221,3 +234,10 @@ msm_drm-$(CONFIG_DRM_MSM) += \
 	msm_debugfs.o
 
 obj-$(CONFIG_DRM_MSM)	+= msm_drm.o
+
+ifeq ($(CONFIG_DISPLAY_SAMSUNG),y)
+obj-y += samsung/
+else ifeq ($(CONFIG_DISPLAY_SAMSUNG_LEGO),y)
+obj-y += samsung_lego/
+endif
+

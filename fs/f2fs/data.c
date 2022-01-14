@@ -90,7 +90,8 @@ static bool __is_cp_guaranteed(struct page *page)
 			inode->i_ino ==  F2FS_NODE_INO(sbi) ||
 			S_ISDIR(inode->i_mode) ||
 			(S_ISREG(inode->i_mode) &&
-			(f2fs_is_atomic_file(inode) || IS_NOQUOTA(inode))) ||
+			(f2fs_is_atomic_file(inode) || IS_NOQUOTA(inode) ||
+			IS_ATOMIC_WRITTEN_PAGE(page))) ||
 			is_cold_data(page))
 		return true;
 	return false;
@@ -379,11 +380,19 @@ static void f2fs_write_end_io(struct bio *bio)
 
 		if (unlikely(bio->bi_status)) {
 			mapping_set_error(page->mapping, -EIO);
-			if (type == F2FS_WB_CP_DATA)
+			if (type == F2FS_WB_CP_DATA) {
+#ifdef CONFIG_DDAR
+				if (fscrypt_dd_encrypted(bio)) {
+					panic("Knox-DualDAR : I/O error on ino(%ld)",
+							fscrypt_dd_get_ino(bio));
+				}
+#endif
 				f2fs_stop_checkpoint(sbi, true);
+				f2fs_bug_on_endio(sbi, 1);
+			}
 		}
 
-		f2fs_bug_on(sbi, page->mapping == NODE_MAPPING(sbi) &&
+		f2fs_bug_on_endio(sbi, page->mapping == NODE_MAPPING(sbi) &&
 					page->index != nid_of_node(page));
 
 		dec_page_count(sbi, type);
@@ -546,6 +555,15 @@ submit_io:
 		trace_f2fs_submit_read_bio(sbi->sb, type, bio);
 	else
 		trace_f2fs_submit_write_bio(sbi->sb, type, bio);
+
+#ifdef CONFIG_DDAR
+	if (type == DATA) {
+		if (fscrypt_dd_may_submit_bio(bio) == -EOPNOTSUPP)
+			submit_bio(bio);
+		return;
+	}
+#endif
+
 	submit_bio(bio);
 }
 
@@ -1019,6 +1037,11 @@ next:
 	     !f2fs_crypt_mergeable_bio(io->bio, fio->page->mapping->host,
 				       fio->page->index, fio)))
 		__submit_merged_bio(io);
+#ifdef CONFIG_DDAR
+	/* DDAR support */
+	if (!fscrypt_dd_can_merge_bio(io->bio, fio->page->mapping))
+		__submit_merged_bio(io);
+#endif
 alloc_new:
 	if (io->bio == NULL) {
 		if (F2FS_IO_ALIGNED(sbi) &&
@@ -2168,6 +2191,14 @@ submit_and_realloc:
 		bio = NULL;
 	}
 
+#ifdef CONFIG_DDAR
+	/* DDAR changes */
+	if (!fscrypt_dd_can_merge_bio(bio, page->mapping)) {
+		__submit_bio(F2FS_I_SB(inode), bio, DATA);
+		bio = NULL;
+	}
+#endif
+
 	if (bio == NULL) {
 		bio = f2fs_grab_read_bio(inode, block_nr, nr_pages,
 				is_readahead ? REQ_RAHEAD : 0, page->index,
@@ -2523,6 +2554,11 @@ int f2fs_encrypt_one_page(struct f2fs_io_info *fio)
 	if (fscrypt_inode_uses_inline_crypto(inode))
 		return 0;
 
+#ifdef CONFIG_DDAR
+	if (fscrypt_dd_encrypted_inode(inode))
+		return 0;
+#endif
+
 retry_encrypt:
 	fio->encrypted_page = fscrypt_encrypt_pagecache_blocks(page,
 					PAGE_SIZE, 0, gfp_flags);
@@ -2678,6 +2714,14 @@ got_it:
 		err = -EFSCORRUPTED;
 		goto out_writepage;
 	}
+
+	if (file_is_hot(inode))
+		F2FS_I_SB(inode)->sec_stat.hot_file_written_blocks++;
+	else if (file_is_cold(inode))
+		F2FS_I_SB(inode)->sec_stat.cold_file_written_blocks++;
+	else
+		F2FS_I_SB(inode)->sec_stat.warm_file_written_blocks++;
+
 	/*
 	 * If current allocation needs SSR,
 	 * it had better in-place writes for updated data.
@@ -2780,6 +2824,8 @@ int f2fs_write_single_data_page(struct page *page, int *submitted,
 	};
 
 	trace_f2fs_writepage(page, DATA);
+
+	f2fs_cond_set_fua(&fio);
 
 	/* we should bypass data pages to proceed the kworkder jobs */
 	if (unlikely(f2fs_cp_error(sbi))) {
@@ -3262,6 +3308,12 @@ static int f2fs_write_data_pages(struct address_space *mapping,
 			    struct writeback_control *wbc)
 {
 	struct inode *inode = mapping->host;
+
+	/* W/A - prevent panic while shutdown */
+	if (unlikely(ignore_fs_panic)) {
+		//pr_err("%s: Ignore panic\n", __func__);
+		return -EIO;
+	}
 
 	return __f2fs_write_data_pages(mapping, wbc,
 			F2FS_I(inode)->cp_task == current ?

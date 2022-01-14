@@ -27,6 +27,14 @@
 #include <crypto/skcipher.h>
 #include "fscrypt_private.h"
 #include <linux/genhd.h>
+#ifdef CONFIG_FS_CRYPTO_SEC_EXTENSION
+#include "crypto_sec.h"
+#else
+static inline int __init fscrypt_sec_crypto_init(void) { return 0; }
+#endif
+#ifdef CONFIG_FSCRYPT_SDP
+#include "sdp/sdp_crypto.h"
+#endif
 
 static unsigned int num_prealloc_crypto_pages = 32;
 
@@ -125,6 +133,9 @@ int fscrypt_crypt_block(const struct inode *inode, fscrypt_direction_t rw,
 	struct fscrypt_info *ci = inode->i_crypt_info;
 	struct crypto_skcipher *tfm = ci->ci_key.tfm;
 	int res = 0;
+#ifdef CONFIG_FSCRYPT_SDP
+	sdp_fs_command_t *cmd = NULL;
+#endif
 
 	if (WARN_ON_ONCE(len <= 0))
 		return -EINVAL;
@@ -154,6 +165,26 @@ int fscrypt_crypt_block(const struct inode *inode, fscrypt_direction_t rw,
 	if (res) {
 		fscrypt_err(inode, "%scryption failed for block %llu: %d",
 			    (rw == FS_DECRYPT ? "De" : "En"), lblk_num, res);
+#ifdef CONFIG_FSCRYPT_SDP
+		if (ci->ci_sdp_info) {
+			if (ci->ci_sdp_info->sdp_flags & SDP_DEK_IS_SENSITIVE) {
+				printk(KERN_ERR "Record audit log in case of a failure during en/decryption of sensitive file\n");
+				if (rw == FS_DECRYPT) {
+					cmd = sdp_fs_command_alloc(FSOP_AUDIT_FAIL_DECRYPT,
+					current->tgid, ci->ci_sdp_info->engine_id, -1, inode->i_ino, res,
+							GFP_KERNEL);
+				} else {
+					cmd = sdp_fs_command_alloc(FSOP_AUDIT_FAIL_ENCRYPT,
+					current->tgid, ci->ci_sdp_info->engine_id, -1, inode->i_ino, res,
+							GFP_KERNEL);
+				}
+				if (cmd) {
+					sdp_fs_request(cmd, NULL);
+					sdp_fs_command_free(cmd);
+				}
+			}
+		}
+#endif
 		return res;
 	}
 	return 0;
@@ -198,6 +229,13 @@ struct page *fscrypt_encrypt_pagecache_blocks(struct page *page,
 		       (offs >> blockbits);
 	unsigned int i;
 	int err;
+
+#ifdef CONFIG_DDAR
+	if (fscrypt_dd_encrypted_inode(inode)) {
+		// Invert crypto order. OEM crypto must perform after 3rd party crypto
+		return NULL;
+	}
+#endif
 
 	if (WARN_ON_ONCE(!PageLocked(page)))
 		return ERR_PTR(-EINVAL);
@@ -283,6 +321,13 @@ int fscrypt_decrypt_pagecache_blocks(struct page *page, unsigned int len,
 
 	if (WARN_ON_ONCE(len <= 0 || !IS_ALIGNED(len | offs, blocksize)))
 		return -EINVAL;
+
+#ifdef CONFIG_DDAR
+	if (fscrypt_dd_encrypted_inode(inode)) {
+		// Invert crypto order. OEM crypto must perform after 3rd party crypto
+		return 0;
+	}
+#endif
 
 	for (i = offs; i < offs + len; i += blocksize, lblk_num++) {
 		err = fscrypt_crypt_block(inode, FS_DECRYPT, lblk_num, page,
@@ -405,7 +450,28 @@ static int __init fscrypt_init(void)
 	if (err)
 		goto fail_free_info;
 
+#ifdef CONFIG_FSCRYPT_SDP
+	if (!fscrypt_sdp_init_sdp_info_cachep())
+		goto fail_free_info;
+#endif
+
+	err = fscrypt_sec_crypto_init();
+	if (err)
+#ifndef CONFIG_FSCRYPT_SDP
+		goto fail_free_info;
+#else
+		goto fail_free_sdp_info;
+#endif
+
+#ifdef CONFIG_FSCRYPT_SDP
+	err = sdp_crypto_init();
+#endif
 	return 0;
+
+#ifdef CONFIG_FSCRYPT_SDP
+fail_free_sdp_info:
+	fscrypt_sdp_release_sdp_info_cachep();
+#endif
 
 fail_free_info:
 	kmem_cache_destroy(fscrypt_info_cachep);

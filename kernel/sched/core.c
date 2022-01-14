@@ -40,6 +40,10 @@
 #include <asm/paravirt.h>
 #endif
 
+#ifdef CONFIG_SEC_DEBUG_SUMMARY
+#include <linux/sec_debug.h>
+#endif
+
 #include "sched.h"
 #include "walt.h"
 #include "../workqueue_internal.h"
@@ -49,6 +53,15 @@
 #include <trace/events/sched.h>
 
 DEFINE_PER_CPU_SHARED_ALIGNED(struct rq, runqueues);
+
+#ifdef CONFIG_SEC_DEBUG_SCHED_LOG
+void summary_set_lpm_info_runqueues(struct sec_debug_summary_data_apss *apss)
+{
+	pr_info("%s : 0x%llx\n", __func__, virt_to_phys((void *)&runqueues));
+	apss->aplpm.p_runqueues = virt_to_phys((void *)&runqueues);
+	apss->aplpm.cstate_offset = offsetof(struct rq, cstate);
+}
+#endif
 
 /*
  * Debugging: various feature bits
@@ -941,8 +954,11 @@ static inline bool is_per_cpu_kthread(struct task_struct *p)
  */
 static inline bool is_cpu_allowed(struct task_struct *p, int cpu)
 {
-	if (!cpumask_test_cpu(cpu, &p->cpus_allowed))
-		return false;
+#ifdef CONFIG_PERF_MGR
+	if (!p->drawing_mig_boost)
+#endif
+		if (!cpumask_test_cpu(cpu, &p->cpus_allowed))
+			return false;
 
 	if (is_per_cpu_kthread(p))
 		return cpu_online(cpu);
@@ -3579,6 +3595,9 @@ static void __sched notrace __schedule(bool preempt)
 		trace_sched_switch(preempt, prev, next);
 
 		/* Also unlocks the rq: */
+#ifdef CONFIG_SEC_DEBUG_SCHED_LOG
+		sec_debug_task_sched_log(cpu, preempt, next, prev);
+#endif
 		rq = context_switch(rq, prev, next, &rf);
 	} else {
 		update_task_ravg(prev, rq, TASK_UPDATE, wallclock, 0);
@@ -6239,7 +6258,7 @@ int sched_cpu_deactivate(unsigned int cpu)
 #ifdef CONFIG_PREEMPT
 	synchronize_sched();
 #endif
-	synchronize_rcu();
+	synchronize_rcu(); 
 
 #ifdef CONFIG_SCHED_SMT
 	/*

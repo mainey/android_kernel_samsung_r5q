@@ -36,6 +36,13 @@
 #include <linux/ulpi/interface.h>
 
 #include <linux/phy/phy.h>
+#ifdef CONFIG_USB_CHARGING_EVENT
+#if defined(CONFIG_BATTERY_SAMSUNG_LEGO_STYLE)
+#include "../../battery/common/include/sec_charging_common.h"
+#else
+#include "../../battery_v2/include/sec_charging_common.h"
+#endif
+#endif
 
 #define DWC3_MSG_MAX	500
 
@@ -715,6 +722,11 @@ enum dwc3_link_state {
 	DWC3_LINK_STATE_MASK		= 0x0f,
 };
 
+enum {
+	RELEASE	= 0,
+	NOTIFY	= 1,
+};
+
 /* TRB Length, PCM and Status */
 #define DWC3_TRB_SIZE_MASK	(0x00ffffff)
 #define DWC3_TRB_SIZE_LENGTH(n)	((n) & DWC3_TRB_SIZE_MASK)
@@ -1225,11 +1237,23 @@ struct dwc3 {
 	 * reset-resume on PM restore.
 	 */
 	bool			ignore_wakeup_src_in_hostmode;
+#if IS_ENABLED(CONFIG_USB_CHARGING_EVENT)
+	struct work_struct      set_vbus_current_work;
+	int			vbus_current; /* 0 : 100mA, 1 : 500mA, 2: 900mA */
+#endif
 	int			retries_on_error;
 	ktime_t			last_run_stop;
 	u32			num_gsi_eps;
 	bool			dual_port;
+	struct delayed_work usb_event_work;
+	ktime_t rst_time_before;
+	ktime_t rst_time_first;
+	int rst_err_cnt;
+	bool rst_err_noti;
+	bool event_state;
 };
+
+#define ERR_RESET_CNT	3
 
 #define work_to_dwc(w)		(container_of((w), struct dwc3, drd_work))
 

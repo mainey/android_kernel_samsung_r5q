@@ -137,6 +137,9 @@ int fscrypt_fname_encrypt(const struct inode *inode, const struct qstr *iname,
 
 	/* Initialize the IV */
 	fscrypt_generate_iv(&iv, 0, ci);
+#ifdef CONFIG_FS_CRYPTO_SEC_EXTENSION
+	memcpy(iv.raw, ci->ci_iv_key, FS_CRYPTO_BLOCK_SIZE);
+#endif
 
 	/* Set up the encryption request */
 	req = skcipher_request_alloc(tfm, GFP_NOFS);
@@ -191,6 +194,9 @@ static int fname_decrypt(const struct inode *inode,
 
 	/* Initialize IV */
 	fscrypt_generate_iv(&iv, 0, ci);
+#ifdef CONFIG_FS_CRYPTO_SEC_EXTENSION
+	memcpy(iv.raw, ci->ci_iv_key, FS_CRYPTO_BLOCK_SIZE);
+#endif
 
 	/* Create decryption request */
 	sg_init_one(&src_sg, iname->name, iname->len);

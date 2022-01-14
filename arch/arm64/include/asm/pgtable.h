@@ -24,6 +24,13 @@
 #include <asm/pgtable-hwdef.h>
 #include <asm/pgtable-prot.h>
 
+#ifdef CONFIG_UH
+#include <linux/uh.h>
+#ifdef CONFIG_UH_RKP
+#include <linux/rkp.h>
+#endif
+#endif
+
 /*
  * VMALLOC range.
  *
@@ -93,8 +100,6 @@ extern unsigned long empty_zero_page[PAGE_SIZE / sizeof(unsigned long)];
 #define pte_valid(pte)		(!!(pte_val(pte) & PTE_VALID))
 #define pte_valid_not_user(pte) \
 	((pte_val(pte) & (PTE_VALID | PTE_USER)) == PTE_VALID)
-#define pte_valid_young(pte) \
-	((pte_val(pte) & (PTE_VALID | PTE_AF)) == (PTE_VALID | PTE_AF))
 #define pte_valid_user(pte) \
 	((pte_val(pte) & (PTE_VALID | PTE_USER)) == (PTE_VALID | PTE_USER))
 
@@ -102,9 +107,12 @@ extern unsigned long empty_zero_page[PAGE_SIZE / sizeof(unsigned long)];
  * Could the pte be present in the TLB? We must check mm_tlb_flush_pending
  * so that we don't erroneously return false for pages that have been
  * remapped as PROT_NONE but are yet to be flushed from the TLB.
+ * Note that we can't make any assumptions based on the state of the access
+ * flag, since ptep_clear_flush_young() elides a DSB when invalidating the
+ * TLB.
  */
 #define pte_accessible(mm, pte)	\
-	(mm_tlb_flush_pending(mm) ? pte_present(pte) : pte_valid_young(pte))
+	(mm_tlb_flush_pending(mm) ? pte_present(pte) : pte_valid(pte))
 
 /*
  * p??_access_permitted() is true for valid user mappings (subject to the
@@ -228,8 +236,15 @@ pte_bad:
 pte_ok:
 #endif
 
+#ifdef CONFIG_UH_RKP
+	/* bug on double mapping */
+	BUG_ON(pte_val(pte) && rkp_is_pg_dbl_mapped(pte_val(pte)));
+ 
+	if (rkp_is_pg_protected((u64)ptep)) {
+		uh_call(UH_APP_RKP, RKP_WRITE_PGT3, (u64)ptep, pte_val(pte), 0, 0);
+	} else
+#endif
 	*ptep = pte;
-
 	/*
 	 * Only if the new pte is valid and kernel, otherwise TLB maintenance
 	 * or update_mmu_cache() have the necessary barriers.
@@ -414,6 +429,11 @@ static inline bool pud_table(pud_t pud) { return true; }
 
 static inline void set_pmd(pmd_t *pmdp, pmd_t pmd)
 {
+#ifdef CONFIG_UH_RKP
+	if (rkp_is_pg_protected((u64)pmdp)) {
+		uh_call(UH_APP_RKP, RKP_WRITE_PGT2, (u64)pmdp, pmd_val(pmd), 0, 0);
+	} else
+#endif
 	*pmdp = pmd;
 	dsb(ishst);
 	isb();
@@ -471,6 +491,11 @@ static inline void pte_unmap(pte_t *pte) { }
 
 static inline void set_pud(pud_t *pudp, pud_t pud)
 {
+#ifdef CONFIG_UH_RKP
+	if (rkp_is_pg_protected((u64)pudp)) {
+		uh_call(UH_APP_RKP, RKP_WRITE_PGT1, (u64)pudp, pud_val(pud), 0, 0);
+	} else
+#endif
 	*pudp = pud;
 	dsb(ishst);
 	isb();

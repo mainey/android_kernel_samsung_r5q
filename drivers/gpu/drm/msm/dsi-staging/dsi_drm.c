@@ -22,6 +22,11 @@
 #include "dsi_drm.h"
 #include "sde_trace.h"
 #include "sde_encoder.h"
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+#include "../samsung/ss_dsi_panel_common.h"
+#elif defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+#include "../samsung_lego/ss_dsi_panel_common.h"
+#endif
 
 #define to_dsi_bridge(x)     container_of((x), struct dsi_bridge, base)
 #define to_dsi_state(x)      container_of((x), struct dsi_connector_state, base)
@@ -95,6 +100,10 @@ static void convert_to_dsi_mode(const struct drm_display_mode *drm_mode,
 		dsi_mode->panel_mode = DSI_OP_VIDEO_MODE;
 	if (drm_mode->flags & DRM_MODE_FLAG_CMD_MODE_PANEL)
 		dsi_mode->panel_mode = DSI_OP_CMD_MODE;
+
+#if defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+	dsi_mode->timing.sot_hs_mode = ss_is_sot_hs_from_drm_mode(drm_mode);
+#endif
 }
 
 void dsi_convert_to_drm_mode(const struct dsi_display_mode *dsi_mode,
@@ -147,10 +156,17 @@ void dsi_convert_to_drm_mode(const struct dsi_display_mode *dsi_mode,
 	if (dsi_mode->panel_mode == DSI_OP_CMD_MODE)
 		drm_mode->flags |= DRM_MODE_FLAG_CMD_MODE_PANEL;
 
+#if defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+	snprintf(drm_mode->name, DRM_DISPLAY_MODE_LEN, "%dx%dx%dx%d%s",
+			drm_mode->hdisplay, drm_mode->vdisplay,
+			drm_mode->vrefresh, drm_mode->clock,
+			dsi_mode->timing.sot_hs_mode ? "HS" : "NS");
+#else
 	/* set mode name */
 	snprintf(drm_mode->name, DRM_DISPLAY_MODE_LEN, "%dx%dx%dx%d",
 			drm_mode->hdisplay, drm_mode->vdisplay,
 			drm_mode->vrefresh, drm_mode->clock);
+#endif
 }
 
 static int dsi_bridge_attach(struct drm_bridge *bridge)
@@ -172,6 +188,9 @@ static void dsi_bridge_pre_enable(struct drm_bridge *bridge)
 {
 	int rc = 0;
 	struct dsi_bridge *c_bridge = to_dsi_bridge(bridge);
+
+	// KR_TEMP
+	pr_err("%s ++\n", __func__);
 
 	if (!bridge) {
 		pr_err("Invalid params\n");
@@ -224,6 +243,8 @@ static void dsi_bridge_pre_enable(struct drm_bridge *bridge)
 	if (rc)
 		pr_err("Continuous splash pipeline cleanup failed, rc=%d\n",
 									rc);
+	// KR_TEMP
+	pr_err("%s --\n", __func__);
 }
 
 static void dsi_bridge_enable(struct drm_bridge *bridge)
@@ -439,7 +460,126 @@ static bool dsi_bridge_mode_fixup(struct drm_bridge *bridge,
 			(!(dsi_mode.dsi_mode_flags & DSI_MODE_FLAG_DYN_CLK)) &&
 			(!crtc_state->active_changed ||
 			 display->is_cont_splash_enabled))
-			dsi_mode.dsi_mode_flags |= DSI_MODE_FLAG_DMS;
+#if defined(CONFIG_DISPLAY_SAMSUNG)
+			if (display->panel->panel_initialized || display->is_cont_splash_enabled) {
+				dsi_mode.dsi_mode_flags |= DSI_MODE_FLAG_DMS;
+				pr_info("DMS : switch mode %s -> %s\n", (&cur_mode)->name, adjusted_mode->name);
+			}
+#elif defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+			{
+				if (display->panel->panel_initialized || display->is_cont_splash_enabled) {
+					struct samsung_display_driver_data *vdd = display->panel->panel_private;
+					struct vrr_info *vrr = &vdd->vrr;
+					bool adjusted_sot_hs;
+					bool cur_sot_hs;
+
+					vrr->adjusted_refresh_rate = adjusted_mode->vrefresh;
+
+					cur_sot_hs = ss_is_sot_hs_from_drm_mode(&cur_mode);
+					adjusted_sot_hs = ss_is_sot_hs_from_drm_mode(adjusted_mode);
+					vrr->adjusted_sot_hs_mode = adjusted_sot_hs;
+
+					vrr->cur_h_active = cur_mode.hdisplay;
+					vrr->cur_v_active = cur_mode.vdisplay;
+					vrr->adjusted_h_active = adjusted_mode->hdisplay;
+					vrr->adjusted_v_active = adjusted_mode->vdisplay;
+
+					/* vrr->cur_refresh_rate valuse is changed in Bridge RR,
+					 * so use cur_mode info.
+					 */
+					if ((cur_mode.vrefresh != adjusted_mode->vrefresh) ||
+							(cur_sot_hs != adjusted_sot_hs)) {
+						LCD_INFO("DMS: VRR flag: %d -> 1\n", vrr->is_vrr_changing);
+						vrr->is_vrr_changing = true;
+						vdd->vrr.running_vrr_mdp = true;
+					}
+
+					if ((cur_mode.hdisplay != adjusted_mode->hdisplay) ||
+							(cur_mode.vdisplay != adjusted_mode->vdisplay)) {
+						LCD_INFO("DMS: MULTI RES flag: %d -> 1\n",
+								vrr->is_multi_resolution_changing);
+						vrr->is_multi_resolution_changing = true;
+					}
+
+					dsi_mode.dsi_mode_flags |= DSI_MODE_FLAG_DMS;
+
+					/* Set max sde core clock to prevent screen noise due to
+					 * unbalanced clock between MDP and panel
+					 * SDE core clock will be restored in ss_panel_vrr_switch()
+					 * after finish VRR change.
+					 */
+					rc = ss_set_max_sde_core_clk(display->drm_dev);
+					if (rc) {
+						LCD_ERR("fail to set max sde core clock..(%d)\n", rc);
+						SS_XLOG(rc, 0xebad);
+					}
+
+					SS_XLOG(cur_mode.vrefresh, cur_sot_hs, adjusted_mode->vrefresh, adjusted_sot_hs);
+					LCD_INFO("DMS: switch mode %s(%dx%d@%d%s) -> %s(%dx%d@%d%s)\n",
+						cur_mode.name,
+						cur_mode.hdisplay,
+						cur_mode.vdisplay,
+						cur_mode.vrefresh,
+						cur_sot_hs ? "HS" : "NS",
+						adjusted_mode->name,
+						adjusted_mode->hdisplay,
+						adjusted_mode->vdisplay,
+						adjusted_mode->vrefresh,
+						adjusted_sot_hs ? "HS" : "NS");
+				}
+				else if (!drm_mode_equal(&cur_mode, adjusted_mode)) {
+					/* In case of that
+					 * - display power state is changing,
+					 * - splash is enabled yet, or
+					 * - VRR, POMS, or DYN_CLK is set,
+					 * it will apply display_mode in dsi_display_mode() function without set DMS flag.
+					 *
+					 * But, Samsung VRR should apply target VRR mode in vrr->cur_refresh_rate.
+					 * Brightness setting will apply current VRR mode, and apply it to UB.
+					 * So, in this corner case, just save target VRR mode in vrr->cur_refresh_rate.
+					 *
+					 * Even it is only multi resolution scenario, not VRR scenario,
+					 * it should save resolution for VRR, and it is harmless to save
+					 * current and target refresh rate to intended refresh rate.
+					 */
+					struct samsung_display_driver_data *vdd = display->panel->panel_private;
+					struct vrr_info *vrr = &vdd->vrr;
+					bool adjusted_sot_hs;
+					bool cur_sot_hs;
+
+					cur_sot_hs = ss_is_sot_hs_from_drm_mode(&cur_mode);
+					adjusted_sot_hs = ss_is_sot_hs_from_drm_mode(adjusted_mode);
+
+					vrr->cur_refresh_rate = vrr->adjusted_refresh_rate =
+						adjusted_mode->vrefresh;
+					vrr->cur_sot_hs_mode = vrr->adjusted_sot_hs_mode =
+						adjusted_sot_hs;
+					vrr->cur_h_active = vrr->adjusted_h_active =
+						adjusted_mode->hdisplay;
+					vrr->cur_v_active  = vrr->adjusted_v_active =
+						adjusted_mode->vdisplay;
+
+					SS_XLOG(cur_mode.vrefresh, cur_sot_hs,
+						adjusted_mode->vrefresh, adjusted_sot_hs,
+						crtc_state->active_changed, display->is_cont_splash_enabled);
+
+					LCD_INFO("DMS: switch mode %s(%dx%d@%d%s) -> %s(%dx%d@%d%s) "\
+							"during active_changed(%d) or splash(%d)\n",
+					cur_mode.name,
+					cur_mode.hdisplay,
+					cur_mode.vdisplay,
+					cur_mode.vrefresh,
+					cur_sot_hs ? "HS" : "NM",
+					adjusted_mode->name,
+					adjusted_mode->hdisplay,
+					adjusted_mode->vdisplay,
+					adjusted_mode->vrefresh,
+					adjusted_sot_hs ? "HS" : "NM",
+					crtc_state->active_changed,
+					display->is_cont_splash_enabled);
+				}
+			}
+#endif
 
 		/* Reject seemless transition when active/connectors changed.*/
 		if ((crtc_state->active_changed ||
@@ -503,6 +643,7 @@ int dsi_conn_get_mode_info(struct drm_connector *connector,
 	if (!dsi_mode.priv_info)
 		return -EINVAL;
 
+	SDE_EVT32(mode_info,  ((unsigned long long)mode_info) >> 32, connector, ((unsigned long long)connector) >> 32, 0x9999);
 	memset(mode_info, 0, sizeof(*mode_info));
 
 	timing = &dsi_mode.timing;
@@ -515,6 +656,10 @@ int dsi_conn_get_mode_info(struct drm_connector *connector,
 	mode_info->mdp_transfer_time_us =
 		dsi_mode.priv_info->mdp_transfer_time_us;
 	mode_info->overlap_pixels = dsi_mode.priv_info->overlap_pixels;
+
+#if defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+	mode_info->frame_rate_org = mode_info->frame_rate;
+#endif
 
 	memcpy(&mode_info->topology, &dsi_mode.priv_info->topology,
 			sizeof(struct msm_display_topology));
@@ -533,6 +678,7 @@ int dsi_conn_get_mode_info(struct drm_connector *connector,
 			sizeof(dsi_mode.priv_info->roi_caps));
 	}
 
+	SDE_EVT32(dsi_mode.priv_info->dsc_enabled, mode_info->clk_rate, mode_info->frame_rate, 0x9999);
 	return 0;
 }
 

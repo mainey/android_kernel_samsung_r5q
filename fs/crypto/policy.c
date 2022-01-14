@@ -15,6 +15,9 @@
 #include <linux/string.h>
 #include <linux/mount.h>
 #include "fscrypt_private.h"
+#ifdef CONFIG_FS_CRYPTO_SEC_EXTENSION
+#include "crypto_sec.h"
+#endif
 
 /**
  * fscrypt_policies_equal() - check whether two encryption policies are the same
@@ -30,6 +33,16 @@ bool fscrypt_policies_equal(const union fscrypt_policy *policy1,
 		return false;
 
 	return !memcmp(policy1, policy2, fscrypt_policy_size(policy1));
+}
+
+static inline int set_nonce(char *nonce)
+{
+#ifdef CONFIG_FS_CRYPTO_SEC_EXTENSION
+	return fscrypt_sec_set_key_aes(nonce);
+#else
+	get_random_bytes(nonce, sizeof(nonce));
+	return 0;
+#endif /* CONFIG FS_CRYPTO_SEC_EXTENSION */
 }
 
 static bool fscrypt_valid_enc_modes(u32 contents_mode, u32 filenames_mode)
@@ -234,6 +247,7 @@ bool fscrypt_supported_policy(const union fscrypt_policy *policy_u,
 static int fscrypt_new_context_from_policy(union fscrypt_context *ctx_u,
 					   const union fscrypt_policy *policy_u)
 {
+	int res;
 	memset(ctx_u, 0, sizeof(*ctx_u));
 
 	switch (policy_u->version) {
@@ -250,7 +264,16 @@ static int fscrypt_new_context_from_policy(union fscrypt_context *ctx_u,
 		memcpy(ctx->master_key_descriptor,
 		       policy->master_key_descriptor,
 		       sizeof(ctx->master_key_descriptor));
-		get_random_bytes(ctx->nonce, sizeof(ctx->nonce));
+		res = set_nonce(ctx->nonce);
+		if (res) {
+			printk(KERN_ERR
+				"%s: Failed to set nonce (err:%d)\n", __func__, res);
+			return res;
+		}
+
+#if defined(CONFIG_FSCRYPT_SDP) || defined(CONFIG_DDAR)
+		ctx->knox_flags = 0;
+#endif
 		return sizeof(*ctx);
 	}
 	case FSCRYPT_POLICY_V2: {
@@ -266,7 +289,16 @@ static int fscrypt_new_context_from_policy(union fscrypt_context *ctx_u,
 		memcpy(ctx->master_key_identifier,
 		       policy->master_key_identifier,
 		       sizeof(ctx->master_key_identifier));
-		get_random_bytes(ctx->nonce, sizeof(ctx->nonce));
+		res = set_nonce(ctx->nonce);
+		if (res) {
+			printk(KERN_ERR
+				"%s: Failed to set nonce (err:%d)\n", __func__, res);
+			return res;
+		}
+
+#if defined(CONFIG_FSCRYPT_SDP) || defined(CONFIG_DDAR)
+		ctx->knox_flags = 0;
+#endif
 		return sizeof(*ctx);
 	}
 	}
@@ -638,6 +670,24 @@ int fscrypt_inherit_context(struct inode *parent, struct inode *child,
 	ctxsize = fscrypt_new_context_from_policy(&ctx, &ci->ci_policy);
 
 	BUILD_BUG_ON(sizeof(ctx) != FSCRYPT_SET_CONTEXT_MAX_SIZE);
+
+#ifdef CONFIG_DDAR
+	res = dd_test_and_inherit_context(&ctx, parent, child, ci, fs_data);
+	if (res) {
+		dd_error("failed to inherit dd policy\n");
+		return res;
+	}
+#endif
+
+#ifdef CONFIG_FSCRYPT_SDP
+	res = fscrypt_sdp_inherit_context(parent, child, &ctx, fs_data);
+	if (res) {
+		printk_once(KERN_WARNING
+				"%s: Failed to set sensitive ongoing flag (err:%d)\n", __func__, res);
+		return res;
+	}
+#endif
+
 	res = parent->i_sb->s_cop->set_context(child, &ctx, ctxsize, fs_data);
 	if (res)
 		return res;

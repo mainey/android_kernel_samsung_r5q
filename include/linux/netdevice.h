@@ -3405,6 +3405,9 @@ void netdev_run_todo(void);
  */
 static inline void dev_put(struct net_device *dev)
 {
+	if (!dev->pcpu_refcnt)
+		return;
+
 	this_cpu_dec(*dev->pcpu_refcnt);
 }
 
